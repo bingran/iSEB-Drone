@@ -18,12 +18,10 @@
 
 #define tftDcPin    A5
 #define tftRstPin   A4 // Or set to -1 and connect to Arduino RESET pin
-#define rightYPin   A3
-#define rightXPin   A2
-#define leftYPin    A1
-#define leftXePin   A0
-
-
+#define rightXPin   A3
+#define rightYPin   A2
+#define leftXPin    A1
+#define leftYPin   A0
 
 /* RF */
 RF24 radio(rfCEPin,rfCSNPin);  // using pin 7 for the CE pin, and pin 8 for the CSN pin
@@ -60,7 +58,10 @@ float flPrevLeftX = 0;
 float flPrevLeftY = 0;
 float flPrevRightX = 0;
 float flPrevRightY = 0;
-
+float flOffsetLeftX  = 0 ;
+float flOffsetLeftY  = 0 ;
+float flOffsetRightX  = 0 ;
+float flOffsetRightY  = 0 ;
 
 
 /* buzzer */
@@ -112,6 +113,7 @@ void setup() {
   /* Serial */
   Serial.begin(115200);
   Serial.println("Hello World!");
+
 
   /* Strip */
   strip.begin();
@@ -165,18 +167,18 @@ void setup() {
   // isDisplayVisible = true;
 
   // Buzzer 2 
-  for (int thisNote = 0; thisNote < 8; thisNote++) {
-    // to calculate the note duration, take one second divided by the note type.
-    //e.g. quarter note = 1000 / 4, eighth note = 1000/8, etc.
-    int noteDuration = 1000 / noteDurations[thisNote];
-    tone(buzzerPin, melody[thisNote], noteDuration);
-    // to distinguish the notes, set a minimum time between them.
-    // the note's duration + 30% seems to work well:
-    int pauseBetweenNotes = noteDuration * 1.30;
-    delay(pauseBetweenNotes);
-    // stop the tone playing:
-    noTone(buzzerPin);
-  }
+  // for (int thisNote = 0; thisNote < 8; thisNote++) {
+  //   // to calculate the note duration, take one second divided by the note type.
+  //   //e.g. quarter note = 1000 / 4, eighth note = 1000/8, etc.
+  //   int noteDuration = 1000 / noteDurations[thisNote];
+  //   tone(buzzerPin, melody[thisNote], noteDuration);
+  //   // to distinguish the notes, set a minimum time between them.
+  //   // the note's duration + 30% seems to work well:
+  //   int pauseBetweenNotes = noteDuration * 1.30;
+  //   delay(pauseBetweenNotes);
+  //   // stop the tone playing:
+  //   noTone(buzzerPin);
+  // }
   // Buzzer 2 END 
   // Buzzer 1 
   // for (int thisNote = 0; thisNote < notes * 2; thisNote = thisNote + 2) {
@@ -202,9 +204,65 @@ void setup() {
   // }
   // Buzzer 1 ENd
 
- 
+   /* button */
+  Serial.println("Calculating button adc offset please wait.");
+  /* expect to be 512 */
+  flLeftX   = analogRead(leftXPin);
+  flLeftY   = analogRead(leftYPin);
+  flRightX  = analogRead(rightXPin);
+  flRightY  = analogRead(rightYPin);
+  Serial.print((flLeftX));     
+  Serial.print(" | ");
+  Serial.print((flLeftY));     
+  Serial.print(" | ");
+  Serial.print((flRightX));     
+  Serial.print(" | ");
+  Serial.println((flRightY)); 
+  flOffsetLeftX   = flLeftX  - 512 ;
+  flOffsetLeftY   = flLeftY  - 512 ;
+  flOffsetRightX  = flRightX - 512 ;
+  flOffsetRightY  = flRightY - 512 ;
+  Serial.print(flOffsetLeftX);     
+  Serial.print(" | ");
+  Serial.print(flOffsetLeftY);     
+  Serial.print(" | ");
+  Serial.print(flOffsetRightX);     
+  Serial.print(" | ");
+  Serial.println(flOffsetRightY);  
 }
 
+void updateaAdcButton()
+{
+  flLeftX = analogRead(leftXPin) - flOffsetLeftX;
+  flLeftY = analogRead(leftYPin) - flOffsetLeftY;
+  flRightX = analogRead(rightXPin) - flOffsetRightX;
+  flRightY = analogRead(rightYPin) - flOffsetRightY;
+
+  if(flLeftX<62)
+    flLeftX = 62;
+  else if(flLeftX>962)
+    flLeftX = 962 ;
+  if(flLeftY<62)
+    flLeftY = 62;
+  else if(flLeftY>962)
+    flLeftY = 962 ;
+  if(flRightX<62)
+    flRightX = 62;
+  else if(flRightX>962)
+    flRightX = 962 ;
+  if(flRightY<62)
+    flRightY = 62;
+  else if(flRightY>962)
+    flRightY = 962 ;
+    
+  Serial.print((flLeftX));     
+  Serial.print(" | ");
+  Serial.print((flLeftY));     
+  Serial.print(" | ");
+  Serial.print((flRightX));     
+  Serial.print(" | ");
+  Serial.println((flRightY)); 
+}
 void loop() {
   // put your main code here, to run repeatedly:
    delay(1);
@@ -214,17 +272,7 @@ void loop() {
     if(0 == timeout)
     {
       timeout = 500;
-      flLeftX = analogRead(leftXePin);
-      flLeftY = analogRead(leftYPin);
-      flRightX = analogRead(rightXPin);
-      flRightY = analogRead(rightYPin);
-      // Serial.print((flLeftX));     
-      // Serial.print(" | ");
-      // Serial.print((flLeftY));     
-      // Serial.print(" | ");
-      // Serial.print((flRightX));     
-      // Serial.print(" | ");
-      // Serial.println((flRightY));  
+      updateaAdcButton();
       if((flPrevLeftX != flLeftX) || (flPrevLeftY != flLeftY))
       {
         tft.setTextColor(Display_Backround_Color);
@@ -297,15 +345,12 @@ void loop() {
       radioTimeout--;
       if(0 == radioTimeout)
       {
-        radioTimeout = 1000;
-        flLeftX = analogRead(leftXePin);
-        flLeftY = analogRead(leftYPin);
-        flRightX = analogRead(rightXPin);
-        flRightY = analogRead(rightYPin);
-        radioMessage[0]= (uint8_t) (flLeftY*255/1028);
-        radioMessage[1]= (uint8_t) (flLeftX*255/1028);
-        radioMessage[2]= (uint8_t) (flRightX*255/1028);
-        radioMessage[3]= (uint8_t) (flRightY*255/1028);
+        radioTimeout = 200;
+        updateaAdcButton();
+        radioMessage[0]= (uint8_t) ((flLeftX-62)*255/900);
+        radioMessage[1]= (uint8_t) ((flLeftY-62)*255/900);
+        radioMessage[2]= (uint8_t) ((flRightX-62)*255/900);
+        radioMessage[3]= (uint8_t) ((flRightY-62)*255/900);
         radioMessage[4] = 0x00;
         radioMessage[4]|= (!bRightButton)?0x01:0x00;
         radioMessage[4]|= (!bLeftButton)?0x02:0x00;
@@ -315,27 +360,28 @@ void loop() {
         
         if(report)
         {
-          Serial.print(F("Tx: "));  // payload was delivered
-          Serial.print(radioMessage);  // print the outgoing message
+          // Serial.print(F("Tx: "));  // payload was delivered
+          // Serial.print(radioMessage);  // print the outgoing message
           uint8_t pipe;
           if (radio.available(&pipe)) {  // is there an ACK payload? grab the pipe number that received it
-            char received[6];
-            radio.read(received, sizeof(received));  // get incoming ACK payload
-            Serial.print(F(" Rx "));
-            Serial.print(pipe);  // print pipe number that received the ACK
-            Serial.print(F(": "));
-            Serial.println(received);    // print incoming message
+            // char received[6];
+            // radio.read(received, sizeof(received));  // get incoming ACK payload
+            // Serial.print(F(" Rx "));
+            // Serial.print(pipe);  // print pipe number that received the ACK
+            // Serial.print(F(": "));
+            // Serial.println(received);    // print incoming message
           }
           else 
           {
-            Serial.println(F(" Recieved: an empty ACK packet"));  // empty ACK packet received
+            // Serial.println(F(" Recieved: an empty ACK packet"));  // empty ACK packet received
           }
         } 
         else 
         {
-          Serial.println(F("Transmission failed or timed out"));  // payload was not delivered
+          // Serial.println(F("Transmission failed or timed out"));  // payload was not delivered
         }
       }
     }
   }
 }
+

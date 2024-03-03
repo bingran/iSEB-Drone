@@ -30,7 +30,11 @@
 #define MAX_PULSE_LENGTH 5000 // Maximum pulse length in µs
 // ---------------------------------------------------------------------------
 Servo mot1, mot2, mot3, mot4;
-
+double motSpeed1 = MIN_PULSE_LENGTH;
+double motSpeed2 = MIN_PULSE_LENGTH;
+double motSpeed3 = MIN_PULSE_LENGTH;
+double motSpeed4 = MIN_PULSE_LENGTH;
+long motortimer = 0;
 
 /* RF */
 RF24 radio(rfCEPin,rfCSNPin);  // using pin 7 for the CE pin, and pin 8 for the CSN pin
@@ -95,6 +99,31 @@ int16_t dig_H5;
 int8_t  dig_H6;
 long BME280timer = 0;
 
+/* motor */
+int throttle = 0;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//PID gain and limit settings
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+float pid_p_gain_roll = 1.3;               //Gain setting for the roll P-controller
+float pid_i_gain_roll = 0.04;              //Gain setting for the roll I-controller
+float pid_d_gain_roll = 18.0;              //Gain setting for the roll D-controller
+int pid_max_roll = 400;                    //Maximum output of the PID-controller (+/-)
+
+float pid_p_gain_pitch = pid_p_gain_roll;  //Gain setting for the pitch P-controller.
+float pid_i_gain_pitch = pid_i_gain_roll;  //Gain setting for the pitch I-controller.
+float pid_d_gain_pitch = pid_d_gain_roll;  //Gain setting for the pitch D-controller.
+int pid_max_pitch = pid_max_roll;          //Maximum output of the PID-controller (+/-)
+
+float pid_p_gain_yaw = 4.0;                //Gain setting for the pitch P-controller. //4.0
+float pid_i_gain_yaw = 0.02;               //Gain setting for the pitch I-controller. //0.02
+float pid_d_gain_yaw = 0.0;                //Gain setting for the pitch D-controller.
+int pid_max_yaw = 400;                     //Maximum output of the PID-controller (+/-)
+
+boolean auto_level = true;                 //Auto level on (true) or off (false)
+
+long acc_x, acc_y, acc_z, acc_total_vector;
+double gyro_pitch, gyro_roll, gyro_yaw;
 
 //notes in the melody:
 int melody[] = {
@@ -116,6 +145,16 @@ void setup() {
   /* Serial */
   Serial.begin(115200);
   Serial.println("Hello World!");
+
+  mot1.attach(pwmMotor1, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
+  mot2.attach(pwmMotor2, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
+  mot3.attach(pwmMotor3, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
+  mot4.attach(pwmMotor4, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
+  mot1.writeMicroseconds(MIN_PULSE_LENGTH);
+  mot2.writeMicroseconds(MIN_PULSE_LENGTH);
+  mot3.writeMicroseconds(MIN_PULSE_LENGTH);
+  mot4.writeMicroseconds(MIN_PULSE_LENGTH);
+
   mySerial.begin(9600);
   delay(500);    
   // if (!SD.begin(sdCSPin)) 
@@ -251,14 +290,7 @@ void setup() {
   writeReg(0xF5,config_reg);
   readTrim(); 
 
-  mot1.attach(pwmMotor1, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
-  mot2.attach(pwmMotor2, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
-  mot3.attach(pwmMotor3, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
-  mot4.attach(pwmMotor4, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
-  mot1.writeMicroseconds(MIN_PULSE_LENGTH);
-  mot2.writeMicroseconds(MIN_PULSE_LENGTH);
-  mot3.writeMicroseconds(MIN_PULSE_LENGTH);
-  mot4.writeMicroseconds(MIN_PULSE_LENGTH);
+  delay(3000); /* delay 3 second */
 }
 
 void loop() {
@@ -354,21 +386,44 @@ void loop() {
     u8LeftY = received[1];
     u8RightX = received[2];
     u8RightY = received[3];
-    Serial.print(F("Recieved on pipe "));
-    Serial.print(u8LeftX);     
-    Serial.print(" | ");
-    Serial.print(u8LeftY);     
-    Serial.print(" | ");
-    Serial.print(u8RightX);     
-    Serial.print(" | ");
+    // Serial.print(F("Recieved on pipe "));
+    // Serial.print(u8LeftX);     
+    // Serial.print(" | ");
+    // Serial.print(u8LeftY);     
+    // Serial.print(" | ");
+    // Serial.print(u8RightX);     
+    // Serial.print(" | ");
     Serial.print(u8RightY);  
     Serial.print(" | ");
-    Serial.print(0x00 != (received[4]&&0x01)?"PRESS":"RELEASED");
-    Serial.print(" | ");
-    Serial.println(0x00 != (received[4]&&0x02)?"PRESS":"RELEASED");
-    Serial.print(F(" Sent: "));
-    Serial.println(radioMessage);    // print outgoing message
+    // Serial.print(0x00 != (received[4]&&0x01)?"PRESS":"RELEASED");
+    // Serial.print(" | ");
+    // Serial.println(0x00 != (received[4]&&0x02)?"PRESS":"RELEASED");
+    // Serial.print(F(" Sent: "));
+    // Serial.println(radioMessage);    // print outgoing message
+
+    if()
+    motSpeed1 =  (u8RightY * 4000 / 255 )+ 1000 ; 
+  
+    Serial.println(motSpeed1);  
+    // motSpeed2 =  (u8RightY * 4000 / 255 )+ 1000 ; 
+    // motSpeed3 =  (u8RightY * 4000 / 255 )+ 1000 ; 
+    // motSpeed4 =  (u8RightY * 4000 / 255 )+ 1000 ; 
+    mot1.writeMicroseconds(motSpeed1);
+    mot2.writeMicroseconds(motSpeed2);
+    mot3.writeMicroseconds(motSpeed4);
+    mot4.writeMicroseconds(motSpeed4);
+
   }
+
+  if(millis() - motortimer > 200)
+  {
+    motortimer = millis();
+    
+  }
+
+
+
+
 }
 
 void readTrim()
@@ -497,4 +552,48 @@ unsigned long int calibration_H(signed long int adc_H)
    v_x1 = (v_x1 < 0 ? 0 : v_x1);
    v_x1 = (v_x1 > 419430400 ? 419430400 : v_x1);
    return (unsigned long int)(v_x1 >> 12);   
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Subroutine for calculating pid outputs
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//The PID controllers are explained in part 5 of the YMFC-3D video session:
+//https://youtu.be/JBvnB0279-Q 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void calculate_pid(){
+  //Roll calculations
+  pid_error_temp = gyro_roll_input - pid_roll_setpoint;
+  pid_i_mem_roll += pid_i_gain_roll * pid_error_temp;
+  if(pid_i_mem_roll > pid_max_roll)pid_i_mem_roll = pid_max_roll;
+  else if(pid_i_mem_roll < pid_max_roll * -1)pid_i_mem_roll = pid_max_roll * -1;
+
+  pid_output_roll = pid_p_gain_roll * pid_error_temp + pid_i_mem_roll + pid_d_gain_roll * (pid_error_temp - pid_last_roll_d_error);
+  if(pid_output_roll > pid_max_roll)pid_output_roll = pid_max_roll;
+  else if(pid_output_roll < pid_max_roll * -1)pid_output_roll = pid_max_roll * -1;
+
+  pid_last_roll_d_error = pid_error_temp;
+
+  //Pitch calculations
+  pid_error_temp = gyro_pitch_input - pid_pitch_setpoint;
+  pid_i_mem_pitch += pid_i_gain_pitch * pid_error_temp;
+  if(pid_i_mem_pitch > pid_max_pitch)pid_i_mem_pitch = pid_max_pitch;
+  else if(pid_i_mem_pitch < pid_max_pitch * -1)pid_i_mem_pitch = pid_max_pitch * -1;
+
+  pid_output_pitch = pid_p_gain_pitch * pid_error_temp + pid_i_mem_pitch + pid_d_gain_pitch * (pid_error_temp - pid_last_pitch_d_error);
+  if(pid_output_pitch > pid_max_pitch)pid_output_pitch = pid_max_pitch;
+  else if(pid_output_pitch < pid_max_pitch * -1)pid_output_pitch = pid_max_pitch * -1;
+
+  pid_last_pitch_d_error = pid_error_temp;
+
+  //Yaw calculations
+  pid_error_temp = gyro_yaw_input - pid_yaw_setpoint;
+  pid_i_mem_yaw += pid_i_gain_yaw * pid_error_temp;
+  if(pid_i_mem_yaw > pid_max_yaw)pid_i_mem_yaw = pid_max_yaw;
+  else if(pid_i_mem_yaw < pid_max_yaw * -1)pid_i_mem_yaw = pid_max_yaw * -1;
+
+  pid_output_yaw = pid_p_gain_yaw * pid_error_temp + pid_i_mem_yaw + pid_d_gain_yaw * (pid_error_temp - pid_last_yaw_d_error);
+  if(pid_output_yaw > pid_max_yaw)pid_output_yaw = pid_max_yaw;
+  else if(pid_output_yaw < pid_max_yaw * -1)pid_output_yaw = pid_max_yaw * -1;
+
+  pid_last_yaw_d_error = pid_error_temp;
 }
