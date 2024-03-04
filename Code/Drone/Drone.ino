@@ -1,5 +1,4 @@
 #include "pitches.h"
-#include <MPU6050_light.h>
 #include <Wire.h>
 #include <SoftwareSerial.h>
 #include <TinyGPS.h>
@@ -10,8 +9,7 @@
 
 #define GPS_DEBUG 0
 #define BME_DEBUG 0
-
-
+#define MPU6050_DEBUG 1
 /* Pinout Definition */
 #define rfCSNPin 10
 #define pwmMotor4 9
@@ -28,13 +26,19 @@
 // Motor
 #define MIN_PULSE_LENGTH 1000 // Minimum pulse length in µs
 #define MAX_PULSE_LENGTH 5000 // Maximum pulse length in µs
+
+uint8_t state = 0 ;
+
 // ---------------------------------------------------------------------------
+
+/* motor */
+double throttle = 0;
 Servo mot1, mot2, mot3, mot4;
-double motSpeed1 = MIN_PULSE_LENGTH;
-double motSpeed2 = MIN_PULSE_LENGTH;
-double motSpeed3 = MIN_PULSE_LENGTH;
-double motSpeed4 = MIN_PULSE_LENGTH;
-long motortimer = 0;
+double esc_1 = MIN_PULSE_LENGTH;
+double esc_2 = MIN_PULSE_LENGTH;
+double esc_3 = MIN_PULSE_LENGTH;
+double esc_4 = MIN_PULSE_LENGTH;
+unsigned long motortimer = 0;
 
 /* RF */
 RF24 radio(rfCEPin,rfCSNPin);  // using pin 7 for the CE pin, and pin 8 for the CSN pin
@@ -42,10 +46,10 @@ byte bRadio = false;
 char radioMessage[6];  // only using 6 characters for TX & ACK payloads
 int radioTimeout = 500;
 uint8_t address[][6] = { "AAAAAA", "555555" };
-uint8_t u8LeftX  = 0;
-uint8_t u8LeftY  = 0;
-uint8_t u8RightX = 0;
-uint8_t u8RightY = 0;
+uint8_t u8Yaw  = 0; /* left X */
+uint8_t u8Lift  = 0; /* left Y */
+uint8_t u8Roll = 0; /* Right X */
+uint8_t u8Pitch = 0; /* RIght Y */
 bool bRightButton = false;
 bool bLeftButton = false;
 
@@ -75,6 +79,7 @@ unsigned short sentences, failed;
 File myFile;
 byte bSDCard = 0;
 
+/* BME */
 #define BME280_ADDRESS 0x76
 unsigned long int hum_raw,temp_raw,pres_raw;
 signed long int t_fine;
@@ -99,9 +104,6 @@ int16_t dig_H5;
 int8_t  dig_H6;
 long BME280timer = 0;
 
-/* motor */
-int throttle = 0;
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //PID gain and limit settings
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -122,9 +124,6 @@ int pid_max_yaw = 400;                     //Maximum output of the PID-controlle
 
 boolean auto_level = true;                 //Auto level on (true) or off (false)
 
-long acc_x, acc_y, acc_z, acc_total_vector;
-double gyro_pitch, gyro_roll, gyro_yaw;
-
 //notes in the melody:
 int melody[] = {
   NOTE_C4, NOTE_G3, NOTE_G3, NOTE_A3, NOTE_G3, 0, NOTE_B3, NOTE_C4
@@ -135,103 +134,80 @@ int noteDurations[] = {
   4, 8, 8, 4, 4, 4, 4, 4
 };
 
-byte bMPU6050  = 0;
-MPU6050 mpu(Wire);
-long mpu6050timer = 0;
+/* MPU6050 */
+#define MPU6050_ADDR                  0x68
+#define MPU6050_SMPLRT_DIV_REGISTER   0x19
+#define MPU6050_CONFIG_REGISTER       0x1a
+#define MPU6050_GYRO_CONFIG_REGISTER  0x1b
+#define MPU6050_ACCEL_CONFIG_REGISTER 0x1c
+#define MPU6050_PWR_MGMT_1_REGISTER   0x6b
+
+#define MPU6050_GYRO_OUT_REGISTER     0x43
+#define MPU6050_ACCEL_OUT_REGISTER    0x3B
+
+uint16_t cal_int = 0;
+long acc_x, acc_y, acc_z, acc_total_vector;
+unsigned long timer_channel_1, timer_channel_2, timer_channel_3, timer_channel_4, esc_timer, esc_loop_timer;
+unsigned long timer_1, timer_2, timer_3, timer_4, current_time;
+unsigned long loop_timer;
+double gyro_pitch, gyro_roll, gyro_yaw;
+double gyro_axis_cal[4];
+float pid_error_temp;
+float pid_i_mem_roll, pid_roll_setpoint, gyro_roll_input, pid_output_roll, pid_last_roll_d_error;
+float pid_i_mem_pitch, pid_pitch_setpoint, gyro_pitch_input, pid_output_pitch, pid_last_pitch_d_error;
+float pid_i_mem_yaw, pid_yaw_setpoint, gyro_yaw_input, pid_output_yaw, pid_last_yaw_d_error;
+float angle_roll_acc, angle_pitch_acc, angle_pitch, angle_roll;
+boolean gyro_angles_set;
+int temperature;
+int acc_axis[4], gyro_axis[4];
+float roll_level_adjust, pitch_level_adjust;
+
 
 void setup() {
   
-  Wire.begin();
   /* Serial */
   Serial.begin(115200);
   Serial.println("Hello World!");
+
+  Wire.begin();   //Start the I2C as master.
+  TWBR = 12;   //Set the I2C clock speed to 400kHz.
 
   mot1.attach(pwmMotor1, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
   mot2.attach(pwmMotor2, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
   mot3.attach(pwmMotor3, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
   mot4.attach(pwmMotor4, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
-  mot1.writeMicroseconds(MIN_PULSE_LENGTH);
+  /* set to minimum to stop the motor and also avoid beep sound */
+  mot1.writeMicroseconds(MIN_PULSE_LENGTH); 
   mot2.writeMicroseconds(MIN_PULSE_LENGTH);
   mot3.writeMicroseconds(MIN_PULSE_LENGTH);
   mot4.writeMicroseconds(MIN_PULSE_LENGTH);
 
-  mySerial.begin(9600);
-  delay(500);    
-  // if (!SD.begin(sdCSPin)) 
-  // {
-  //   Serial.println("initialization failed!");
-  //   bSDCard =0;
-  // }
-  // else
-  // {
-  //   Serial.println("initialization done.");
-  //   bSDCard =1;
-  // }
- 
-  // if(1 == bSDCard)
-  // {
-  //   // open the file. note that only one file can be open at a time,
-  //   // so you have to close this one before opening another.
-  //   myFile = SD.open("test.txt", FILE_WRITE);
+  delay(100);   
+  BME_Init();
 
-  //   // if the file opened okay, write to it:
-  //   if (myFile) 
-  //   {
-  //     Serial.print("Writing to test.txt...");
-  //     myFile.println("testing 1, 2, 3.");
-  //     // close the file:
-  //     myFile.close();
-  //     Serial.println("done.");
-  //   } else 
-  //   {
-  //       // if the file didn't open, print an error:
-  //       Serial.println("error opening test.txt");
-  //   }
+  set_gyro_registers(); //Set the specific gyro registers.
 
-  //   // re-open the file for reading:
-  //   myFile = SD.open("test.txt");
-  //   if (myFile) 
-  //   {
-  //     Serial.println("test.txt:");
-
-  //     // read from the file until there's nothing else in it:
-  //     while (myFile.available())
-  //     {
-  //       Serial.write(myFile.read());
-  //     }
-  //     // close the file:
-  //     myFile.close();
-  //   } else 
-  //   {
-  //     // if the file didn't open, print an error:
-  //     Serial.println("error opening test.txt");
-  //   }
-  // }
-  bMPU6050 = mpu.begin();
-  if(0x00 == bMPU6050)
-  {
-    Serial.println(F("Calculating offsets, do not move MPU6050"));
+  //Let's take multiple gyro data samples so we can determine the average gyro offset (calibration).
+  Serial.println("Calibrating MPU6050 please dont move the device!");
+  for (cal_int = 0; cal_int < 2000 ; cal_int ++){                           //Take 2000 readings for calibration.
+    gyro_signalen();                                                        //Read the gyro output.
+    gyro_axis_cal[1] += gyro_axis[1];                                       //Ad roll value to gyro_roll_cal.
+    gyro_axis_cal[2] += gyro_axis[2];                                       //Ad pitch value to gyro_pitch_cal.
+    gyro_axis_cal[3] += gyro_axis[3];                                       //Ad yaw value to gyro_yaw_cal.
+    delayMicroseconds(200);                                                //Wait 1000us.
   }
 
+  //Now that we have 2000 measures, we need to devide by 2000 to get the average gyro offset.
+  gyro_axis_cal[1] /= 2000;                                                 //Divide the roll total by 2000.
+  gyro_axis_cal[2] /= 2000;                                                 //Divide the pitch total by 2000.
+  gyro_axis_cal[3] /= 2000;                                                 //Divide the yaw total by 2000.
+
+  mySerial.begin(9600);
+ 
   
-  
-  delay(500);
-
-  // Buzzer
-  // for (int thisNote = 0; thisNote < 8; thisNote++) {
-  //   // to calculate the note duration, take one second divided by the note type.
-  //   //e.g. quarter note = 1000 / 4, eighth note = 1000/8, etc.
-  //   int noteDuration = 1000 / noteDurations[thisNote];
-  //   tone(buzzerPin, melody[thisNote], noteDuration);
-  //   // to distinguish the notes, set a minimum time between them.
-  //   // the note's duration + 30% seems to work well:
-  //   int pauseBetweenNotes = noteDuration * 1.30;
-  //   delay(pauseBetweenNotes);
-  //   // stop the tone playing:
-  //   noTone(buzzerPin);
-  // }
-
-
+  /* should read the battery voltage here */
+  //battery_voltage = (analogRead(0) + 65) * 1.2317;
+  //delay(500);
 
   if (!radio.begin()) {
     bRadio = false;
@@ -262,15 +238,281 @@ void setup() {
     radio.writeAckPayload(1, &radioMessage, sizeof(radioMessage));
     radio.startListening();  // put radio in RX mode
   }
-  
-  
 
-  if(0x00 == bMPU6050)
+  delay(3000); /* delay 3 second */
+}
+
+void loop() {
+  BME_task();
+  GPS_task();
+
+  //65.5 = 1 deg/sec (check the datasheet of the MPU-6050 for more information).
+  gyro_roll_input = (gyro_roll_input * 0.7) + ((gyro_roll / 65.5) * 0.3);   //Gyro pid input is deg/sec.
+  gyro_pitch_input = (gyro_pitch_input * 0.7) + ((gyro_pitch / 65.5) * 0.3);//Gyro pid input is deg/sec.
+  gyro_yaw_input = (gyro_yaw_input * 0.7) + ((gyro_yaw / 65.5) * 0.3);      //Gyro pid input is deg/sec.
+
+  angle_pitch += gyro_pitch * 0.0000611;                                    //Calculate the traveled pitch angle and add this to the angle_pitch variable.
+  angle_roll += gyro_roll * 0.0000611;                                      //Calculate the traveled roll angle and add this to the angle_roll variable.
+
+  angle_pitch -= angle_roll * sin(gyro_yaw * 0.000001066);                  //If the IMU has yawed transfer the roll angle to the pitch angel.
+  angle_roll += angle_pitch * sin(gyro_yaw * 0.000001066);                  //If the IMU has yawed transfer the pitch angle to the roll angel.
+
+  //Accelerometer angle calculations
+  acc_total_vector = sqrt((acc_x*acc_x)+(acc_y*acc_y)+(acc_z*acc_z));       //Calculate the total accelerometer vector.
+  
+  if(abs(acc_y) < acc_total_vector){                                        //Prevent the asin function to produce a NaN
+    angle_pitch_acc = asin((float)acc_y/acc_total_vector)* 57.296;          //Calculate the pitch angle.
+  }
+  if(abs(acc_x) < acc_total_vector){                                        //Prevent the asin function to produce a NaN
+    angle_roll_acc = asin((float)acc_x/acc_total_vector)* -57.296;          //Calculate the roll angle.
+  }
+  
+  //Place the MPU-6050 spirit level and note the values in the following two lines for calibration.
+  angle_pitch_acc -= 0.0;                                                   //Accelerometer calibration value for pitch.
+  angle_roll_acc -= 0.0;                                                    //Accelerometer calibration value for roll.
+  
+  angle_pitch = angle_pitch * 0.9996 + angle_pitch_acc * 0.0004;            //Correct the drift of the gyro pitch angle with the accelerometer pitch angle.
+  angle_roll = angle_roll * 0.9996 + angle_roll_acc * 0.0004;               //Correct the drift of the gyro roll angle with the accelerometer roll angle.
+
+  pitch_level_adjust = angle_pitch * 15;                                    //Calculate the pitch angle correction
+  roll_level_adjust = angle_roll * 15;                                      //Calculate the roll angle correction
+
+
+  uint8_t pipe;
+  if (radio.available(&pipe)) {                     // is there a payload? get the pipe number that recieved it
+    // load the payload for the first received transmission on pipe 0
+    radio.writeAckPayload(1,&radioMessage,6);
+    uint8_t bytes = radio.getDynamicPayloadSize();  // get the size of the payload
+    char received[6];
+    radio.read(received, sizeof(received));  // get incoming ACK payload
+    u8Yaw = received[0];
+    u8Lift = received[1];
+    u8Roll = received[2];
+    u8Pitch = received[3];
+    Serial.print(F("Recieved on pipe "));
+    Serial.print(u8Yaw);     
+    Serial.print(" | ");
+    Serial.print(u8Lift);     
+    Serial.print(" | ");
+    Serial.print(u8Roll);     
+    Serial.print(" | ");
+    Serial.print(u8Pitch);  
+    Serial.print(" | ");
+    Serial.print(0x00 != (received[4]&&0x01)?"PRESS":"RELEASED");
+    Serial.print(" | ");
+    Serial.println(0x00 != (received[4]&&0x02)?"PRESS":"RELEASED");
+    Serial.print(F(" Sent: "));
+    Serial.println(radioMessage);    // print outgoing message
+
+    //Serial.println(esc_1);  
+    // esc_1 =  (u8RightY * 4000 / 255 )+ 1000 ; 
+    // esc_2 =  (u8RightY * 4000 / 255 )+ 1000 ; 
+    // esc_3 =  (u8RightY * 4000 / 255 )+ 1000 ; 
+    // esc_4 =  (u8RightY * 4000 / 255 )+ 1000 ; 
+  
+  }
+  //For starting the motors: throttle low .
+  if(( 0 == state ) && (64 > u8Lift) )
   {
-    mpu.calcOffsets(true,true); // gyro and accelero
-    Serial.println("offset Done!\n");
+    state = 1; 
+  }
+  else if (( 1 == state ) && ( 96 < u8Lift ) && ( 160 > u8Lift))
+  {
+    state = 2;
+    angle_pitch = angle_pitch_acc;                                          //Set the gyro pitch angle equal to the accelerometer pitch angle when the quadcopter is started.
+    angle_roll = angle_roll_acc;                                            //Set the gyro roll angle equal to the accelerometer roll angle when the quadcopter is started.
+
+    //Reset the PID controllers for a bumpless start.
+    pid_i_mem_roll = 0;
+    pid_last_roll_d_error = 0;
+    pid_i_mem_pitch = 0;
+    pid_last_pitch_d_error = 0;
+    pid_i_mem_yaw = 0;
+    pid_last_yaw_d_error = 0;
   }
 
+  //The PID set point in degrees per second is determined by the roll receiver input.
+  //In the case of deviding by 3 the max roll rate is aprox 164 degrees per second ( (500-8)/3 = 164d/s ).
+  pid_roll_setpoint = 0;
+  //We need a little dead band of 16us for better results.
+  if(u8Roll > 1508)pid_roll_setpoint = u8Roll - 1508;
+  else if(u8Roll < 1492)pid_roll_setpoint = u8Roll - 1492;
+
+  pid_roll_setpoint -= roll_level_adjust;                                   //Subtract the angle correction from the standardized receiver roll input value.
+  pid_roll_setpoint /= 3.0;                                                 //Divide the setpoint for the PID roll controller by 3 to get angles in degrees.
+
+
+  //The PID set point in degrees per second is determined by the pitch receiver input.
+  //In the case of deviding by 3 the max pitch rate is aprox 164 degrees per second ( (500-8)/3 = 164d/s ).
+  pid_pitch_setpoint = 0;
+  //We need a little dead band of 16us for better results.
+  if(u8Pitch > 1508)pid_pitch_setpoint = u8Pitch - 1508;
+  else if(u8Pitch < 1492)pid_pitch_setpoint = u8Pitch - 1492;
+
+  pid_pitch_setpoint -= pitch_level_adjust;                                  //Subtract the angle correction from the standardized receiver pitch input value.
+  pid_pitch_setpoint /= 3.0;                                                 //Divide the setpoint for the PID pitch controller by 3 to get angles in degrees.
+
+  //The PID set point in degrees per second is determined by the yaw receiver input.
+  //In the case of deviding by 3 the max yaw rate is aprox 164 degrees per second ( (500-8)/3 = 164d/s ).
+  pid_yaw_setpoint = 0;
+  //We need a little dead band of 16us for better results.
+  if(u8Lift > 1050){ //Do not yaw when turning off the motors.
+    if(u8Yaw > 1508)pid_yaw_setpoint = (u8Yaw - 1508)/3.0;
+    else if(u8Yaw < 1492)pid_yaw_setpoint = (u8Yaw - 1492)/3.0;
+  }
+  
+  calculate_pid();                                                            //PID inputs are known. So we can calculate the pid output.
+
+  if( 2 == state )
+  {
+    mot1.writeMicroseconds(esc_1);
+    mot2.writeMicroseconds(esc_2);
+    mot3.writeMicroseconds(esc_4);
+    mot4.writeMicroseconds(esc_4);
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Subroutine for calculating pid outputs
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//The PID controllers are explained in part 5 of the YMFC-3D video session:
+//https://youtu.be/JBvnB0279-Q 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void calculate_pid(){
+  //Roll calculations
+  pid_error_temp = gyro_roll_input - pid_roll_setpoint;
+  pid_i_mem_roll += pid_i_gain_roll * pid_error_temp;
+  if(pid_i_mem_roll > pid_max_roll)pid_i_mem_roll = pid_max_roll;
+  else if(pid_i_mem_roll < pid_max_roll * -1)pid_i_mem_roll = pid_max_roll * -1;
+
+  pid_output_roll = pid_p_gain_roll * pid_error_temp + pid_i_mem_roll + pid_d_gain_roll * (pid_error_temp - pid_last_roll_d_error);
+  if(pid_output_roll > pid_max_roll)pid_output_roll = pid_max_roll;
+  else if(pid_output_roll < pid_max_roll * -1)pid_output_roll = pid_max_roll * -1;
+
+  pid_last_roll_d_error = pid_error_temp;
+
+  //Pitch calculations
+  pid_error_temp = gyro_pitch_input - pid_pitch_setpoint;
+  pid_i_mem_pitch += pid_i_gain_pitch * pid_error_temp;
+  if(pid_i_mem_pitch > pid_max_pitch)pid_i_mem_pitch = pid_max_pitch;
+  else if(pid_i_mem_pitch < pid_max_pitch * -1)pid_i_mem_pitch = pid_max_pitch * -1;
+
+  pid_output_pitch = pid_p_gain_pitch * pid_error_temp + pid_i_mem_pitch + pid_d_gain_pitch * (pid_error_temp - pid_last_pitch_d_error);
+  if(pid_output_pitch > pid_max_pitch)pid_output_pitch = pid_max_pitch;
+  else if(pid_output_pitch < pid_max_pitch * -1)pid_output_pitch = pid_max_pitch * -1;
+
+  pid_last_pitch_d_error = pid_error_temp;
+
+  //Yaw calculations
+  pid_error_temp = gyro_yaw_input - pid_yaw_setpoint;
+  pid_i_mem_yaw += pid_i_gain_yaw * pid_error_temp;
+  if(pid_i_mem_yaw > pid_max_yaw)pid_i_mem_yaw = pid_max_yaw;
+  else if(pid_i_mem_yaw < pid_max_yaw * -1)pid_i_mem_yaw = pid_max_yaw * -1;
+
+  pid_output_yaw = pid_p_gain_yaw * pid_error_temp + pid_i_mem_yaw + pid_d_gain_yaw * (pid_error_temp - pid_last_yaw_d_error);
+  if(pid_output_yaw > pid_max_yaw)pid_output_yaw = pid_max_yaw;
+  else if(pid_output_yaw < pid_max_yaw * -1)pid_output_yaw = pid_max_yaw * -1;
+
+  pid_last_yaw_d_error = pid_error_temp;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//MPU6050 start
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void gyro_signalen(){
+  loop_timer = micros();   
+  {
+    //Read the MPU-6050
+    Wire.beginTransmission(MPU6050_ADDR);                                   //Start communication with the gyro.
+    Wire.write(MPU6050_ACCEL_OUT_REGISTER);                                                       //Start reading @ register 43h and auto increment with every read.
+    Wire.endTransmission();                                                 //End the transmission.
+    Wire.requestFrom(MPU6050_ADDR,14);                                      //Request 14 bytes from the gyro.
+    
+    while(Wire.available() < 14);                                           //Wait until the 14 bytes are received.
+    acc_axis[1] = Wire.read()<<8|Wire.read();                               //Add the low and high byte to the acc_x variable.
+    acc_axis[2] = Wire.read()<<8|Wire.read();                               //Add the low and high byte to the acc_y variable.
+    acc_axis[3] = Wire.read()<<8|Wire.read();                               //Add the low and high byte to the acc_z variable.
+    temperature = Wire.read()<<8|Wire.read();                               //Add the low and high byte to the temperature variable.
+    gyro_axis[1] = Wire.read()<<8|Wire.read();                              //Read high and low part of the angular data.
+    gyro_axis[2] = Wire.read()<<8|Wire.read();                              //Read high and low part of the angular data.
+    gyro_axis[3] = Wire.read()<<8|Wire.read();                              //Read high and low part of the angular data.
+
+    if(cal_int == 2000){
+      gyro_axis[1] -= gyro_axis_cal[1];                                       //Only compensate after the calibration.
+      gyro_axis[2] -= gyro_axis_cal[2];                                       //Only compensate after the calibration.
+      gyro_axis[3] -= gyro_axis_cal[3];                                       //Only compensate after the calibration.
+    }
+    gyro_roll = gyro_axis[1];                      //Set gyro_roll to the correct axis that was stored in the EEPROM.
+    gyro_pitch = gyro_axis[2];                     //Set gyro_pitch to the correct axis that was stored in the EEPROM.
+    gyro_yaw = gyro_axis[3];                       //Set gyro_yaw to the correct axis that was stored in the EEPROM.
+    
+    acc_x = acc_axis[1];                           //Set acc_x to the correct axis that was stored in the EEPROM.
+    acc_y = acc_axis[2];                           //Set acc_y to the correct axis that was stored in the EEPROM.
+    acc_z = acc_axis[3];                           //Set acc_z to the correct axis that was stored in the EEPROM.
+#if MPU6050_DEBUG == 1
+    if(cal_int == 2000)
+    {
+        Serial.print("gyro_roll : ");
+        Serial.print(gyro_roll);
+        Serial.print(" | gyro_pitch : ");
+        Serial.print(gyro_pitch);
+        Serial.print(" | gyro_yaw: ");
+        Serial.println(gyro_yaw);
+        Serial.print("acc_x : ");
+        Serial.print(acc_x);
+        Serial.print(" | acc_y : ");
+        Serial.print(acc_y);
+        Serial.print(" | acc_z: ");
+        Serial.println(acc_z);
+    }
+#endif
+  }
+  
+
+}
+
+void set_gyro_registers(){
+  //Setup the MPU-6050
+  Wire.beginTransmission(MPU6050_ADDR);                                      //Start communication with the address found during search.
+  Wire.write(MPU6050_PWR_MGMT_1_REGISTER);                                   //We want to write to the PWR_MGMT_1 register (6B hex)
+  Wire.write(0x00);                                                          //Set the register bits as 00000000 to activate the gyro
+  Wire.endTransmission();                                                    //End the transmission with the gyro.
+
+  Wire.beginTransmission(MPU6050_ADDR);                                      //Start communication with the address found during search.
+  Wire.write(MPU6050_GYRO_CONFIG_REGISTER);                                                          //We want to write to the GYRO_CONFIG register (1B hex)
+  Wire.write(0x08);                                                          //Set the register bits as 00001000 (500dps full scale)
+  Wire.endTransmission();                                                    //End the transmission with the gyro
+
+  Wire.beginTransmission(MPU6050_ADDR);                                      //Start communication with the address found during search.
+  Wire.write(MPU6050_ACCEL_CONFIG_REGISTER);                                                          //We want to write to the ACCEL_CONFIG register (1A hex)
+  Wire.write(0x10);                                                          //Set the register bits as 00010000 (+/- 8g full scale range)
+  Wire.endTransmission();                                                    //End the transmission with the gyro
+
+  //Let's perform a random register check to see if the values are written correct
+  Wire.beginTransmission(MPU6050_ADDR);                                      //Start communication with the address found during search
+  Wire.write(MPU6050_GYRO_CONFIG_REGISTER);                                                          //Start reading @ register 0x1B
+  Wire.endTransmission();                                                    //End the transmission
+  Wire.requestFrom(MPU6050_ADDR, 1);                                         //Request 1 bytes from the gyro
+  while(Wire.available() < 1);                                               //Wait until the 6 bytes are received
+  if(Wire.read() != 0x08){                                                   //Check if the value is 0x08
+    Serial.println("MPU6050 update fail.");                                  //Stay in this loop for ever
+  }
+
+  Wire.beginTransmission(MPU6050_ADDR);                                      //Start communication with the address found during search
+  Wire.write(MPU6050_CONFIG_REGISTER);                                                          //We want to write to the CONFIG register (1A hex)
+  Wire.write(0x03);                                                          //Set the register bits as 00000011 (Set Digital Low Pass Filter to ~43Hz)
+  Wire.endTransmission();                                                    //End the transmission with the gyro    
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//MPU6050 end
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////
+// BME start
+///////////////////////////////////////////////////////////////////////////////////
+void BME_Init()
+{
   uint8_t osrs_t = 1;             //Temperature oversampling x 1
   uint8_t osrs_p = 1;             //Pressure oversampling x 1
   uint8_t osrs_h = 1;             //Humidity oversampling x 1
@@ -289,42 +531,15 @@ void setup() {
   writeReg(0xF4,ctrl_meas_reg);
   writeReg(0xF5,config_reg);
   readTrim(); 
-
-  delay(3000); /* delay 3 second */
 }
-
-void loop() {
-
-  if(0x00 == bMPU6050)
-  {
-    if(millis() - mpu6050timer > 1000)
-    { 
-      mpu.update();
-      Serial.print(F("TEMPERATURE: "));Serial.println(mpu.getTemp());
-      Serial.print(F("ACCELERO  X: "));Serial.print(mpu.getAccX());
-      Serial.print(" | Y: ");Serial.print(mpu.getAccY());
-      Serial.print(" | Z: ");Serial.println(mpu.getAccZ());
-    
-      Serial.print(F("GYRO      X: "));Serial.print(mpu.getGyroX());
-      Serial.print(" | Y: ");Serial.print(mpu.getGyroY());
-      Serial.print(" | Z: ");Serial.println(mpu.getGyroZ());
-    
-      Serial.print(F("ACC ANGLE X: "));Serial.print(mpu.getAccAngleX());
-      Serial.print(" | Y: ");Serial.println(mpu.getAccAngleY());
-      
-      Serial.print(F("ANGLE     X: "));Serial.print(mpu.getAngleX());
-      Serial.print(" | Y: ");Serial.print(mpu.getAngleY());
-      Serial.print(" | Z: ");Serial.println(mpu.getAngleZ());
-      mpu6050timer = millis();
-    }
-  }
-  
+void BME_task()
+{
   if(millis() - BME280timer > 1000)
   { 
     double temp_act = 0.0, press_act = 0.0,hum_act=0.0;
     signed long int temp_cal;
     unsigned long int press_cal,hum_cal;
-    
+
     readData();
 
     temp_cal = calibration_T(temp_raw);
@@ -333,7 +548,7 @@ void loop() {
     temp_act = (double)temp_cal / 100.0;
     press_act = (double)press_cal / 100.0;
     hum_act = (double)hum_cal / 1024.0;
-#if BME_DEBUG == 1
+    #if BME_DEBUG == 1
     Serial.print("TEMP : ");
     Serial.print(temp_act);
     Serial.print(" DegC  PRESS : ");
@@ -341,89 +556,9 @@ void loop() {
     Serial.print(" hPa  HUM : ");
     Serial.print(hum_act);
     Serial.println(" %");    
-#endif
+    #endif
     BME280timer = millis();
   }
-
-  while (mySerial.available())
-  {
-      char c = mySerial.read();
-      // Serial.write(c); // uncomment this line if you want to see the GPS data flowing
-      if (gps.encode(c)) // Did a new valid sentence come in?
-        newData = true;
-  }
-
-  if(millis() - gpstimer > 1000) // print data every second
-  {
-    if (newData)
-    {
-      newData = false;
-      float flat, flon;
-      unsigned long age;
-#if GPS_DEBUG == 1
-      gps.f_get_position(&flat, &flon, &age);
-      Serial.print("LAT=");
-      Serial.print(flat == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flat, 6);
-      Serial.print(" LON=");
-      Serial.print(flon == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flon, 6);
-      Serial.print(" SAT=");
-      Serial.print(gps.satellites() == TinyGPS::GPS_INVALID_SATELLITES ? 0 : gps.satellites());
-      Serial.print(" PREC=");
-      Serial.println(gps.hdop() == TinyGPS::GPS_INVALID_HDOP ? 0 : gps.hdop());
-#endif
-    }
-    gpstimer = millis();
-  }
-
-  uint8_t pipe;
-  if (radio.available(&pipe)) {                     // is there a payload? get the pipe number that recieved it
-    // load the payload for the first received transmission on pipe 0
-    radio.writeAckPayload(1,&radioMessage,6);
-    uint8_t bytes = radio.getDynamicPayloadSize();  // get the size of the payload
-    char received[6];
-    radio.read(received, sizeof(received));  // get incoming ACK payload
-    u8LeftX = received[0];
-    u8LeftY = received[1];
-    u8RightX = received[2];
-    u8RightY = received[3];
-    // Serial.print(F("Recieved on pipe "));
-    // Serial.print(u8LeftX);     
-    // Serial.print(" | ");
-    // Serial.print(u8LeftY);     
-    // Serial.print(" | ");
-    // Serial.print(u8RightX);     
-    // Serial.print(" | ");
-    Serial.print(u8RightY);  
-    Serial.print(" | ");
-    // Serial.print(0x00 != (received[4]&&0x01)?"PRESS":"RELEASED");
-    // Serial.print(" | ");
-    // Serial.println(0x00 != (received[4]&&0x02)?"PRESS":"RELEASED");
-    // Serial.print(F(" Sent: "));
-    // Serial.println(radioMessage);    // print outgoing message
-
-    if()
-    motSpeed1 =  (u8RightY * 4000 / 255 )+ 1000 ; 
-  
-    Serial.println(motSpeed1);  
-    // motSpeed2 =  (u8RightY * 4000 / 255 )+ 1000 ; 
-    // motSpeed3 =  (u8RightY * 4000 / 255 )+ 1000 ; 
-    // motSpeed4 =  (u8RightY * 4000 / 255 )+ 1000 ; 
-    mot1.writeMicroseconds(motSpeed1);
-    mot2.writeMicroseconds(motSpeed2);
-    mot3.writeMicroseconds(motSpeed4);
-    mot4.writeMicroseconds(motSpeed4);
-
-  }
-
-  if(millis() - motortimer > 200)
-  {
-    motortimer = millis();
-    
-  }
-
-
-
-
 }
 
 void readTrim()
@@ -553,47 +688,47 @@ unsigned long int calibration_H(signed long int adc_H)
    v_x1 = (v_x1 > 419430400 ? 419430400 : v_x1);
    return (unsigned long int)(v_x1 >> 12);   
 }
+////////////////////////////////////////////////////////////////////////////////////
+// BME end
+///////////////////////////////////////////////////////////////////////////////////
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//Subroutine for calculating pid outputs
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//The PID controllers are explained in part 5 of the YMFC-3D video session:
-//https://youtu.be/JBvnB0279-Q 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void calculate_pid(){
-  //Roll calculations
-  pid_error_temp = gyro_roll_input - pid_roll_setpoint;
-  pid_i_mem_roll += pid_i_gain_roll * pid_error_temp;
-  if(pid_i_mem_roll > pid_max_roll)pid_i_mem_roll = pid_max_roll;
-  else if(pid_i_mem_roll < pid_max_roll * -1)pid_i_mem_roll = pid_max_roll * -1;
+////////////////////////////////////////////////////////////////////////////////////
+// GPS start
+///////////////////////////////////////////////////////////////////////////////////
+void GPS_task()
+{
+  /* GPS start */ 
+  while (mySerial.available())
+  {
+      char c = mySerial.read();
+      // Serial.write(c); // uncomment this line if you want to see the GPS data flowing
+      if (gps.encode(c)) // Did a new valid sentence come in?
+        newData = true;
+  }
 
-  pid_output_roll = pid_p_gain_roll * pid_error_temp + pid_i_mem_roll + pid_d_gain_roll * (pid_error_temp - pid_last_roll_d_error);
-  if(pid_output_roll > pid_max_roll)pid_output_roll = pid_max_roll;
-  else if(pid_output_roll < pid_max_roll * -1)pid_output_roll = pid_max_roll * -1;
-
-  pid_last_roll_d_error = pid_error_temp;
-
-  //Pitch calculations
-  pid_error_temp = gyro_pitch_input - pid_pitch_setpoint;
-  pid_i_mem_pitch += pid_i_gain_pitch * pid_error_temp;
-  if(pid_i_mem_pitch > pid_max_pitch)pid_i_mem_pitch = pid_max_pitch;
-  else if(pid_i_mem_pitch < pid_max_pitch * -1)pid_i_mem_pitch = pid_max_pitch * -1;
-
-  pid_output_pitch = pid_p_gain_pitch * pid_error_temp + pid_i_mem_pitch + pid_d_gain_pitch * (pid_error_temp - pid_last_pitch_d_error);
-  if(pid_output_pitch > pid_max_pitch)pid_output_pitch = pid_max_pitch;
-  else if(pid_output_pitch < pid_max_pitch * -1)pid_output_pitch = pid_max_pitch * -1;
-
-  pid_last_pitch_d_error = pid_error_temp;
-
-  //Yaw calculations
-  pid_error_temp = gyro_yaw_input - pid_yaw_setpoint;
-  pid_i_mem_yaw += pid_i_gain_yaw * pid_error_temp;
-  if(pid_i_mem_yaw > pid_max_yaw)pid_i_mem_yaw = pid_max_yaw;
-  else if(pid_i_mem_yaw < pid_max_yaw * -1)pid_i_mem_yaw = pid_max_yaw * -1;
-
-  pid_output_yaw = pid_p_gain_yaw * pid_error_temp + pid_i_mem_yaw + pid_d_gain_yaw * (pid_error_temp - pid_last_yaw_d_error);
-  if(pid_output_yaw > pid_max_yaw)pid_output_yaw = pid_max_yaw;
-  else if(pid_output_yaw < pid_max_yaw * -1)pid_output_yaw = pid_max_yaw * -1;
-
-  pid_last_yaw_d_error = pid_error_temp;
+  if(millis() - gpstimer > 1000) // print data every second
+  {
+    if (newData)
+    {
+      newData = false;
+      float flat, flon;
+      unsigned long age;
+#if GPS_DEBUG == 1
+      gps.f_get_position(&flat, &flon, &age);
+      Serial.print("LAT=");
+      Serial.print(flat == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flat, 6);
+      Serial.print(" LON=");
+      Serial.print(flon == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flon, 6);
+      Serial.print(" SAT=");
+      Serial.print(gps.satellites() == TinyGPS::GPS_INVALID_SATELLITES ? 0 : gps.satellites());
+      Serial.print(" PREC=");
+      Serial.println(gps.hdop() == TinyGPS::GPS_INVALID_HDOP ? 0 : gps.hdop());
+#endif
+    }
+    gpstimer = millis();
+  }
+/* GPS end */
 }
+////////////////////////////////////////////////////////////////////////////////////
+// GPS start
+///////////////////////////////////////////////////////////////////////////////////
