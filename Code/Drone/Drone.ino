@@ -32,7 +32,10 @@ uint8_t state = 0 ;
 // ---------------------------------------------------------------------------
 
 /* motor */
-double throttle = 0;
+uint32_t double_lift = 0;
+uint32_t double_yaw = 0;
+uint32_t double_roll = 0;
+uint32_t double_pitch = 0;
 Servo mot1, mot2, mot3, mot4;
 double esc_1 = MIN_PULSE_LENGTH;
 double esc_2 = MIN_PULSE_LENGTH;
@@ -52,19 +55,6 @@ uint8_t u8Roll = 0; /* Right X */
 uint8_t u8Pitch = 0; /* RIght Y */
 bool bRightButton = false;
 bool bLeftButton = false;
-
-enum {
-  RF_BME280_TEMPERATURE = 0x00,
-  RF_BME280_PRESSURE = 0x00,
-  RF_BME280_HUMIDITY = 0x00,
-  RF_ACC_X = 0x00,
-  RF_ACC_Y = 0x00,
-  RF_ACC_Z = 0x00,
-  RF_GYRO_X = 0x00,
-  RF_GYRO_Y = 0x00,
-  RF_GYRO_Z = 0x00,
-  RF_GPS_LOCATION = 0x00,
-}rfTaskState;
 
 /*GPS*/
 TinyGPS gps;
@@ -136,7 +126,6 @@ int noteDurations[] = {
 
 /* MPU6050 */
 #define MPU6050_ADDR                  0x68
-#define MPU6050_SMPLRT_DIV_REGISTER   0x19
 #define MPU6050_CONFIG_REGISTER       0x1a
 #define MPU6050_GYRO_CONFIG_REGISTER  0x1b
 #define MPU6050_ACCEL_CONFIG_REGISTER 0x1c
@@ -145,13 +134,15 @@ int noteDurations[] = {
 #define MPU6050_GYRO_OUT_REGISTER     0x43
 #define MPU6050_ACCEL_OUT_REGISTER    0x3B
 
+#define MPU6050_CAL_NUM               1000
+
 uint16_t cal_int = 0;
 long acc_x, acc_y, acc_z, acc_total_vector;
 unsigned long timer_channel_1, timer_channel_2, timer_channel_3, timer_channel_4, esc_timer, esc_loop_timer;
 unsigned long timer_1, timer_2, timer_3, timer_4, current_time;
 unsigned long loop_timer;
 double gyro_pitch, gyro_roll, gyro_yaw;
-double gyro_axis_cal[4];
+double gyro_axis_cal[6];
 float pid_error_temp;
 float pid_i_mem_roll, pid_roll_setpoint, gyro_roll_input, pid_output_roll, pid_last_roll_d_error;
 float pid_i_mem_pitch, pid_pitch_setpoint, gyro_pitch_input, pid_output_pitch, pid_last_pitch_d_error;
@@ -161,7 +152,8 @@ boolean gyro_angles_set;
 int temperature;
 int acc_axis[4], gyro_axis[4];
 float roll_level_adjust, pitch_level_adjust;
-
+long MPU6050timer = 0;
+long MPU6050Printtimer = 0;
 
 void setup() {
   
@@ -182,25 +174,27 @@ void setup() {
   mot3.writeMicroseconds(MIN_PULSE_LENGTH);
   mot4.writeMicroseconds(MIN_PULSE_LENGTH);
 
-  delay(100);   
+  delay(250);   
   BME_Init();
-
-  set_gyro_registers(); //Set the specific gyro registers.
+  delay(250);  
+  MPU6050_Init(); //Set the specific gyro registers. 
+  delay(250);  
 
   //Let's take multiple gyro data samples so we can determine the average gyro offset (calibration).
   Serial.println("Calibrating MPU6050 please dont move the device!");
-  for (cal_int = 0; cal_int < 2000 ; cal_int ++){                           //Take 2000 readings for calibration.
-    gyro_signalen();                                                        //Read the gyro output.
+  for (cal_int = 0; cal_int < MPU6050_CAL_NUM ; cal_int ++){                           //Take 2000 readings for calibration.
+    MPU6050_readData();                                                        //Read the gyro output.
     gyro_axis_cal[1] += gyro_axis[1];                                       //Ad roll value to gyro_roll_cal.
     gyro_axis_cal[2] += gyro_axis[2];                                       //Ad pitch value to gyro_pitch_cal.
     gyro_axis_cal[3] += gyro_axis[3];                                       //Ad yaw value to gyro_yaw_cal.
-    delayMicroseconds(200);                                                //Wait 1000us.
+     if(cal_int % 125 == 0)Serial.print(".");                             //Print a dot on the LCD every 125 readings
+    delay(4);                                                               //Wait 1000us.
   }
 
-  //Now that we have 2000 measures, we need to devide by 2000 to get the average gyro offset.
-  gyro_axis_cal[1] /= 2000;                                                 //Divide the roll total by 2000.
-  gyro_axis_cal[2] /= 2000;                                                 //Divide the pitch total by 2000.
-  gyro_axis_cal[3] /= 2000;                                                 //Divide the yaw total by 2000.
+  //Now that we have MPU6050_CAL_NUM measures, we need to devide by 2000 to get the average gyro offset.
+  gyro_axis_cal[1] /= MPU6050_CAL_NUM;                                                 //Divide the roll total by 2000.
+  gyro_axis_cal[2] /= MPU6050_CAL_NUM;                                                 //Divide the pitch total by 2000.
+  gyro_axis_cal[3] /= MPU6050_CAL_NUM;                                                 //Divide the yaw total by 2000.
 
   mySerial.begin(9600);
  
@@ -245,43 +239,145 @@ void setup() {
 void loop() {
   BME_task();
   GPS_task();
+  radio_task();
+  switch(state)
+  {
+    case 0:
+    {
+      if((1200 > double_lift)&& (1200 > double_yaw))
+      {
+        state = 1; 
+      }
+      state = 2; //* for testing purposer */
+      break;
+    }
+    case 1:
+    {
+      if(( 1050 < double_lift ) && ( 1200 > double_lift))
+      {
+        state = 2;
+        angle_pitch = angle_pitch_acc;                                          //Set the gyro pitch angle equal to the accelerometer pitch angle when the quadcopter is started.
+        angle_roll = angle_roll_acc;                                            //Set the gyro roll angle equal to the accelerometer roll angle when the quadcopter is started.
 
-  //65.5 = 1 deg/sec (check the datasheet of the MPU-6050 for more information).
-  gyro_roll_input = (gyro_roll_input * 0.7) + ((gyro_roll / 65.5) * 0.3);   //Gyro pid input is deg/sec.
-  gyro_pitch_input = (gyro_pitch_input * 0.7) + ((gyro_pitch / 65.5) * 0.3);//Gyro pid input is deg/sec.
-  gyro_yaw_input = (gyro_yaw_input * 0.7) + ((gyro_yaw / 65.5) * 0.3);      //Gyro pid input is deg/sec.
+        //Reset the PID controllers for a bumpless start.
+        pid_i_mem_roll = 0;
+        pid_last_roll_d_error = 0;
+        pid_i_mem_pitch = 0;
+        pid_last_pitch_d_error = 0;
+        pid_i_mem_yaw = 0;
+        pid_last_yaw_d_error = 0;
+      }
+      break;
+    }
+    case 2:
+    {
+      if(millis() - MPU6050timer > 4)/* loop every 4 ms */ 
+      {
+        /* get data from sensor */
+        MPU6050_readData();
+        // To average the value againt changes 
+        // 2 btye 65535 range ± 500 °/s so we will got 65.5 = 1 °/s 
+        //65.5 = 1 deg/sec (check the datasheet of the MPU-6050 for more information).
+        gyro_roll_input = (gyro_roll_input * 0.7) + ((gyro_roll / 65.5) * 0.3);   //Gyro pid input is deg/sec.
+        gyro_pitch_input = (gyro_pitch_input * 0.7) + ((gyro_pitch / 65.5) * 0.3);//Gyro pid input is deg/sec.
+        gyro_yaw_input = (gyro_yaw_input * 0.7) + ((gyro_yaw / 65.5) * 0.3);      //Gyro pid input is deg/sec.
 
-  angle_pitch += gyro_pitch * 0.0000611;                                    //Calculate the traveled pitch angle and add this to the angle_pitch variable.
-  angle_roll += gyro_roll * 0.0000611;                                      //Calculate the traveled roll angle and add this to the angle_roll variable.
+        // Calculate the traveled pitch and roll angle
+        // we have degree per second ( °/s  )
+        // Task call every 4ms = 250Hz 
+        // 2 btye 65535 range ± 500 °/s so we will got 65.5 = 1 °/s 
+        // data / 250 / 65.5  = traveled angle  1/(250*65.5) = 0.0000611
+        angle_pitch += gyro_pitch * 0.0000611;                                    //Calculate the traveled pitch angle and add this to the angle_pitch variable.
+        angle_roll += gyro_roll * 0.0000611;                                      //Calculate the traveled roll angle and add this to the angle_roll variable.
 
-  angle_pitch -= angle_roll * sin(gyro_yaw * 0.000001066);                  //If the IMU has yawed transfer the roll angle to the pitch angel.
-  angle_roll += angle_pitch * sin(gyro_yaw * 0.000001066);                  //If the IMU has yawed transfer the pitch angle to the roll angel.
+        // add in factor when the device is not flat which gyro yaw is no 90 ( sin 90 = 1 )
+        // convert data from degree to radian  =
+        // radian = degree * PI / 180 
+        //0.000001066 = 0.0000611 * (3.142(PI) / 180degr) 
+        //The Arduino sin function is in radians 
+        angle_pitch -= angle_roll * sin(gyro_yaw * 0.000001066);                  //If the IMU has yawed transfer the roll angle to the pitch angel.
+        angle_roll += angle_pitch * sin(gyro_yaw * 0.000001066);                  //If the IMU has yawed transfer the pitch angle to the roll angel.
 
-  //Accelerometer angle calculations
-  acc_total_vector = sqrt((acc_x*acc_x)+(acc_y*acc_y)+(acc_z*acc_z));       //Calculate the total accelerometer vector.
-  
-  if(abs(acc_y) < acc_total_vector){                                        //Prevent the asin function to produce a NaN
-    angle_pitch_acc = asin((float)acc_y/acc_total_vector)* 57.296;          //Calculate the pitch angle.
+        //Accelerometer angle calculations
+        acc_total_vector = sqrt((acc_x*acc_x)+(acc_y*acc_y)+(acc_z*acc_z));       //Calculate the total accelerometer vector.
+        //57.296 = 1 / (3.142 / 180) The Arduino asin function is in radians
+        if(abs(acc_y) < acc_total_vector){                                        //Prevent the asin function to produce a NaN
+          angle_pitch_acc = asin((float)acc_y/acc_total_vector)* 57.296;          //Calculate the pitch angle.
+        }
+        if(abs(acc_x) < acc_total_vector){                                        //Prevent the asin function to produce a NaN
+          angle_roll_acc = asin((float)acc_x/acc_total_vector)* -57.296;          //Calculate the roll angle.
+        }
+        
+        //Place the MPU-6050 spirit level and note the values in the following two lines for calibration.
+        angle_pitch_acc -= 0.0;                                                   //Accelerometer calibration value for pitch.
+        angle_roll_acc -= 0.0;                                                    //Accelerometer calibration value for roll.
+        
+        /* to compenstate the gyro drift */
+        angle_pitch = angle_pitch * 0.9996 + angle_pitch_acc * 0.0004;            //Correct the drift of the gyro pitch angle with the accelerometer pitch angle.
+        angle_roll = angle_roll * 0.9996 + angle_roll_acc * 0.0004;               //Correct the drift of the gyro roll angle with the accelerometer roll angle.
+
+        pitch_level_adjust = angle_pitch * 15;                                    //Calculate the pitch angle correction
+        roll_level_adjust = angle_roll * 15;                                      //Calculate the roll angle correction
+
+        //The PID set point in degrees per second is determined by the roll receiver input.
+        //In the case of deviding by 3 the max roll rate is aprox 164 degrees per second ( (500-8)/3 = 164d/s ).
+        pid_roll_setpoint = 0;
+        //We need a little dead band of 16us for better results.
+        if(double_roll > 1508)pid_roll_setpoint = double_roll - 1508;
+        else if(double_roll < 1492)pid_roll_setpoint = double_roll - 1492;
+
+        pid_roll_setpoint -= roll_level_adjust;                                   //Subtract the angle correction from the standardized receiver roll input value.
+        pid_roll_setpoint /= 3.0;                                                 //Divide the setpoint for the PID roll controller by 3 to get angles in degrees.
+
+
+        //The PID set point in degrees per second is determined by the pitch receiver input.
+        //In the case of deviding by 3 the max pitch rate is aprox 164 degrees per second ( (500-8)/3 = 164d/s ).
+        pid_pitch_setpoint = 0;
+        //We need a little dead band of 16us for better results.
+        if(double_pitch > 1508)pid_pitch_setpoint = double_pitch - 1508;
+        else if(double_pitch < 1492)pid_pitch_setpoint = double_pitch - 1492;
+
+        pid_pitch_setpoint -= pitch_level_adjust;                                  //Subtract the angle correction from the standardized receiver pitch input value.
+        pid_pitch_setpoint /= 3.0;                                                 //Divide the setpoint for the PID pitch controller by 3 to get angles in degrees.
+
+        //The PID set point in degrees per second is determined by the yaw receiver input.
+        //In the case of deviding by 3 the max yaw rate is aprox 164 degrees per second ( (500-8)/3 = 164d/s ).
+        pid_yaw_setpoint = 0;
+        //We need a little dead band of 16us for better results.
+        if(u8Lift > 1050){ //Do not yaw when turning off the motors.
+          if(double_yaw > 1508)pid_yaw_setpoint = (double_yaw - 1508)/3.0;
+          else if(double_yaw < 1492)pid_yaw_setpoint = (double_yaw - 1492)/3.0;
+        }
+
+        /* use pid to calculate motor outputt */
+        calculate_pid();                                                            //PID inputs are known. So we can calculate the pid output.
+
+        /* update motor frequency */
+        mot1.writeMicroseconds(esc_1);
+        mot2.writeMicroseconds(esc_2);
+        mot3.writeMicroseconds(esc_4);
+        mot4.writeMicroseconds(esc_4);
+
+        MPU6050timer = millis();
+      }
+      break;
+    }
+    default:
+    {
+      state = 0;
+      break;
+    }
   }
-  if(abs(acc_x) < acc_total_vector){                                        //Prevent the asin function to produce a NaN
-    angle_roll_acc = asin((float)acc_x/acc_total_vector)* -57.296;          //Calculate the roll angle.
-  }
-  
-  //Place the MPU-6050 spirit level and note the values in the following two lines for calibration.
-  angle_pitch_acc -= 0.0;                                                   //Accelerometer calibration value for pitch.
-  angle_roll_acc -= 0.0;                                                    //Accelerometer calibration value for roll.
-  
-  angle_pitch = angle_pitch * 0.9996 + angle_pitch_acc * 0.0004;            //Correct the drift of the gyro pitch angle with the accelerometer pitch angle.
-  angle_roll = angle_roll * 0.9996 + angle_roll_acc * 0.0004;               //Correct the drift of the gyro roll angle with the accelerometer roll angle.
-
-  pitch_level_adjust = angle_pitch * 15;                                    //Calculate the pitch angle correction
-  roll_level_adjust = angle_roll * 15;                                      //Calculate the roll angle correction
+}
 
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void radio_task()
+{
   uint8_t pipe;
   if (radio.available(&pipe)) {                     // is there a payload? get the pipe number that recieved it
     // load the payload for the first received transmission on pipe 0
-    radio.writeAckPayload(1,&radioMessage,6);
+    // radio.writeAckPayload(1,&radioMessage,6);
     uint8_t bytes = radio.getDynamicPayloadSize();  // get the size of the payload
     char received[6];
     radio.read(received, sizeof(received));  // get incoming ACK payload
@@ -289,89 +385,28 @@ void loop() {
     u8Lift = received[1];
     u8Roll = received[2];
     u8Pitch = received[3];
-    Serial.print(F("Recieved on pipe "));
-    Serial.print(u8Yaw);     
-    Serial.print(" | ");
-    Serial.print(u8Lift);     
-    Serial.print(" | ");
-    Serial.print(u8Roll);     
-    Serial.print(" | ");
-    Serial.print(u8Pitch);  
-    Serial.print(" | ");
-    Serial.print(0x00 != (received[4]&&0x01)?"PRESS":"RELEASED");
-    Serial.print(" | ");
-    Serial.println(0x00 != (received[4]&&0x02)?"PRESS":"RELEASED");
-    Serial.print(F(" Sent: "));
-    Serial.println(radioMessage);    // print outgoing message
+    // Serial.print(F("Recieved on pipe "));
+    // Serial.print(u8Yaw);     
+    // Serial.print(" | ");
+    // Serial.print(u8Lift);     
+    // Serial.print(" | ");
+    // Serial.print(u8Roll);     
+    // Serial.print(" | ");
+    // Serial.print(u8Pitch);  
+    // Serial.print(" | ");
+    // Serial.print(0x00 != (received[4]&&0x01)?"PRESS":"RELEASED");
+    // Serial.print(" | ");
+    // Serial.println(0x00 != (received[4]&&0x02)?"PRESS":"RELEASED");
+    // Serial.print(F(" Sent: "));
+    // Serial.println(radioMessage);    // print outgoing message
+     
+    double_yaw   =  ((uint32_t)u8Yaw   * 900 / 255 )+ 1050 ; 
+    double_lift  =  ((uint32_t)u8Lift  * 900 / 255 )+ 1050 ; 
+    double_roll  =  ((uint32_t)u8Roll  * 900 / 255 )+ 1050 ; 
+    double_pitch =  ((uint32_t)u8Pitch * 900 / 255 )+ 1050 ; 
 
-    //Serial.println(esc_1);  
-    // esc_1 =  (u8RightY * 4000 / 255 )+ 1000 ; 
-    // esc_2 =  (u8RightY * 4000 / 255 )+ 1000 ; 
-    // esc_3 =  (u8RightY * 4000 / 255 )+ 1000 ; 
-    // esc_4 =  (u8RightY * 4000 / 255 )+ 1000 ; 
-  
-  }
-  //For starting the motors: throttle low .
-  if(( 0 == state ) && (64 > u8Lift) )
-  {
-    state = 1; 
-  }
-  else if (( 1 == state ) && ( 96 < u8Lift ) && ( 160 > u8Lift))
-  {
-    state = 2;
-    angle_pitch = angle_pitch_acc;                                          //Set the gyro pitch angle equal to the accelerometer pitch angle when the quadcopter is started.
-    angle_roll = angle_roll_acc;                                            //Set the gyro roll angle equal to the accelerometer roll angle when the quadcopter is started.
-
-    //Reset the PID controllers for a bumpless start.
-    pid_i_mem_roll = 0;
-    pid_last_roll_d_error = 0;
-    pid_i_mem_pitch = 0;
-    pid_last_pitch_d_error = 0;
-    pid_i_mem_yaw = 0;
-    pid_last_yaw_d_error = 0;
-  }
-
-  //The PID set point in degrees per second is determined by the roll receiver input.
-  //In the case of deviding by 3 the max roll rate is aprox 164 degrees per second ( (500-8)/3 = 164d/s ).
-  pid_roll_setpoint = 0;
-  //We need a little dead band of 16us for better results.
-  if(u8Roll > 1508)pid_roll_setpoint = u8Roll - 1508;
-  else if(u8Roll < 1492)pid_roll_setpoint = u8Roll - 1492;
-
-  pid_roll_setpoint -= roll_level_adjust;                                   //Subtract the angle correction from the standardized receiver roll input value.
-  pid_roll_setpoint /= 3.0;                                                 //Divide the setpoint for the PID roll controller by 3 to get angles in degrees.
-
-
-  //The PID set point in degrees per second is determined by the pitch receiver input.
-  //In the case of deviding by 3 the max pitch rate is aprox 164 degrees per second ( (500-8)/3 = 164d/s ).
-  pid_pitch_setpoint = 0;
-  //We need a little dead band of 16us for better results.
-  if(u8Pitch > 1508)pid_pitch_setpoint = u8Pitch - 1508;
-  else if(u8Pitch < 1492)pid_pitch_setpoint = u8Pitch - 1492;
-
-  pid_pitch_setpoint -= pitch_level_adjust;                                  //Subtract the angle correction from the standardized receiver pitch input value.
-  pid_pitch_setpoint /= 3.0;                                                 //Divide the setpoint for the PID pitch controller by 3 to get angles in degrees.
-
-  //The PID set point in degrees per second is determined by the yaw receiver input.
-  //In the case of deviding by 3 the max yaw rate is aprox 164 degrees per second ( (500-8)/3 = 164d/s ).
-  pid_yaw_setpoint = 0;
-  //We need a little dead band of 16us for better results.
-  if(u8Lift > 1050){ //Do not yaw when turning off the motors.
-    if(u8Yaw > 1508)pid_yaw_setpoint = (u8Yaw - 1508)/3.0;
-    else if(u8Yaw < 1492)pid_yaw_setpoint = (u8Yaw - 1492)/3.0;
-  }
-  
-  calculate_pid();                                                            //PID inputs are known. So we can calculate the pid output.
-
-  if( 2 == state )
-  {
-    mot1.writeMicroseconds(esc_1);
-    mot2.writeMicroseconds(esc_2);
-    mot3.writeMicroseconds(esc_4);
-    mot4.writeMicroseconds(esc_4);
   }
 }
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Subroutine for calculating pid outputs
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -379,6 +414,15 @@ void loop() {
 //https://youtu.be/JBvnB0279-Q 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void calculate_pid(){
+  //pid_roll_setpoint ->set target
+  //gryo_roll_input -> actual input from sensor
+  //pid_i_gain_roll -> PID -> i component 
+  //pid_i_mem_roll ->  Still unsure 
+  // pid_p_gain_roll -> PID -> P component
+  // pid_d_gain_roll -> PID -> D component 
+  // p = proportional  y= mx + c (m)
+  // i = intergration = area under graph 
+  // d = dy / dx
   //Roll calculations
   pid_error_temp = gyro_roll_input - pid_roll_setpoint;
   pid_i_mem_roll += pid_i_gain_roll * pid_error_temp;
@@ -419,72 +463,70 @@ void calculate_pid(){
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //MPU6050 start
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void gyro_signalen(){
-  loop_timer = micros();   
-  {
-    //Read the MPU-6050
-    Wire.beginTransmission(MPU6050_ADDR);                                   //Start communication with the gyro.
-    Wire.write(MPU6050_ACCEL_OUT_REGISTER);                                                       //Start reading @ register 43h and auto increment with every read.
-    Wire.endTransmission();                                                 //End the transmission.
-    Wire.requestFrom(MPU6050_ADDR,14);                                      //Request 14 bytes from the gyro.
-    
-    while(Wire.available() < 14);                                           //Wait until the 14 bytes are received.
-    acc_axis[1] = Wire.read()<<8|Wire.read();                               //Add the low and high byte to the acc_x variable.
-    acc_axis[2] = Wire.read()<<8|Wire.read();                               //Add the low and high byte to the acc_y variable.
-    acc_axis[3] = Wire.read()<<8|Wire.read();                               //Add the low and high byte to the acc_z variable.
-    temperature = Wire.read()<<8|Wire.read();                               //Add the low and high byte to the temperature variable.
-    gyro_axis[1] = Wire.read()<<8|Wire.read();                              //Read high and low part of the angular data.
-    gyro_axis[2] = Wire.read()<<8|Wire.read();                              //Read high and low part of the angular data.
-    gyro_axis[3] = Wire.read()<<8|Wire.read();                              //Read high and low part of the angular data.
+void MPU6050_readData(){
 
-    if(cal_int == 2000){
-      gyro_axis[1] -= gyro_axis_cal[1];                                       //Only compensate after the calibration.
-      gyro_axis[2] -= gyro_axis_cal[2];                                       //Only compensate after the calibration.
-      gyro_axis[3] -= gyro_axis_cal[3];                                       //Only compensate after the calibration.
-    }
-    gyro_roll = gyro_axis[1];                      //Set gyro_roll to the correct axis that was stored in the EEPROM.
-    gyro_pitch = gyro_axis[2];                     //Set gyro_pitch to the correct axis that was stored in the EEPROM.
-    gyro_yaw = gyro_axis[3];                       //Set gyro_yaw to the correct axis that was stored in the EEPROM.
-    
-    acc_x = acc_axis[1];                           //Set acc_x to the correct axis that was stored in the EEPROM.
-    acc_y = acc_axis[2];                           //Set acc_y to the correct axis that was stored in the EEPROM.
-    acc_z = acc_axis[3];                           //Set acc_z to the correct axis that was stored in the EEPROM.
-#if MPU6050_DEBUG == 1
-    if(cal_int == 2000)
-    {
-        Serial.print("gyro_roll : ");
-        Serial.print(gyro_roll);
-        Serial.print(" | gyro_pitch : ");
-        Serial.print(gyro_pitch);
-        Serial.print(" | gyro_yaw: ");
-        Serial.println(gyro_yaw);
-        Serial.print("acc_x : ");
-        Serial.print(acc_x);
-        Serial.print(" | acc_y : ");
-        Serial.print(acc_y);
-        Serial.print(" | acc_z: ");
-        Serial.println(acc_z);
-    }
-#endif
-  }
+  //Read the MPU-6050
+  Wire.beginTransmission(MPU6050_ADDR);                                   //Start communication with the gyro.
+  Wire.write(MPU6050_ACCEL_OUT_REGISTER);                                                       //Start reading @ register 43h and auto increment with every read.
+  Wire.endTransmission();                                                 //End the transmission.
+  Wire.requestFrom(MPU6050_ADDR,14);                                      //Request 14 bytes from the gyro.
   
+  while(Wire.available() < 14);                                           //Wait until the 14 bytes are received.
+  acc_axis[1] = Wire.read()<<8|Wire.read();                               //Add the low and high byte to the acc_x variable.
+  acc_axis[2] = Wire.read()<<8|Wire.read();                               //Add the low and high byte to the acc_y variable.
+  acc_axis[3] = Wire.read()<<8|Wire.read();                               //Add the low and high byte to the acc_z variable.
+  temperature = Wire.read()<<8|Wire.read();                               //Add the low and high byte to the temperature variable.
+  gyro_axis[1] = Wire.read()<<8|Wire.read();                              //Read high and low part of the angular data.
+  gyro_axis[2] = Wire.read()<<8|Wire.read();                              //Read high and low part of the angular data.
+  gyro_axis[3] = Wire.read()<<8|Wire.read();                              //Read high and low part of the angular data.
 
+  if(cal_int == MPU6050_CAL_NUM){
+    gyro_axis[1] -= gyro_axis_cal[1];                                       //Only compensate after the calibration.
+    gyro_axis[2] -= gyro_axis_cal[2];                                       //Only compensate after the calibration.
+    gyro_axis[3] -= gyro_axis_cal[3];                                       //Only compensate after the calibration.
+  }
+  gyro_roll = gyro_axis[1];                      //Set gyro_roll to the correct axis that was stored in the EEPROM.
+  gyro_pitch = gyro_axis[2];                     //Set gyro_pitch to the correct axis that was stored in the EEPROM.
+  gyro_yaw = gyro_axis[3];                       //Set gyro_yaw to the correct axis that was stored in the EEPROM.
+  
+  acc_x = acc_axis[1];                           //Set acc_x to the correct axis that was stored in the EEPROM.
+  acc_y = acc_axis[2];                           //Set acc_y to the correct axis that was stored in the EEPROM.
+  acc_z = acc_axis[3];                           //Set acc_z to the correct axis that was stored in the EEPROM.  
+#if MPU6050_DEBUG == 1
+  if((millis() - MPU6050Printtimer > 1000)&&(2==state))
+  {
+    Serial.print("gyro_roll : ");
+    Serial.print(gyro_roll);
+    Serial.print(" | gyro_pitch : ");
+    Serial.print(gyro_pitch);
+    Serial.print(" | gyro_yaw: ");
+    Serial.println(gyro_yaw);
+    Serial.print("acc_x : ");
+    Serial.print(acc_x);
+    Serial.print(" | acc_y : ");
+    Serial.print(acc_y);
+    Serial.print(" | acc_z: ");
+    Serial.println(acc_z);
+
+    MPU6050Printtimer = millis();
+  }
+#endif
 }
 
-void set_gyro_registers(){
+void MPU6050_Init(){
   //Setup the MPU-6050
   Wire.beginTransmission(MPU6050_ADDR);                                      //Start communication with the address found during search.
-  Wire.write(MPU6050_PWR_MGMT_1_REGISTER);                                   //We want to write to the PWR_MGMT_1 register (6B hex)
+  Wire.write(MPU6050_PWR_MGMT_1_REGISTER);                                   //We want to write to the PWR_MGMT_1 register (6B hex) to reset it 
   Wire.write(0x00);                                                          //Set the register bits as 00000000 to activate the gyro
   Wire.endTransmission();                                                    //End the transmission with the gyro.
 
   Wire.beginTransmission(MPU6050_ADDR);                                      //Start communication with the address found during search.
-  Wire.write(MPU6050_GYRO_CONFIG_REGISTER);                                                          //We want to write to the GYRO_CONFIG register (1B hex)
+  Wire.write(MPU6050_GYRO_CONFIG_REGISTER);                                  //We want to write to the GYRO_CONFIG register (1B hex)
   Wire.write(0x08);                                                          //Set the register bits as 00001000 (500dps full scale)
   Wire.endTransmission();                                                    //End the transmission with the gyro
 
   Wire.beginTransmission(MPU6050_ADDR);                                      //Start communication with the address found during search.
-  Wire.write(MPU6050_ACCEL_CONFIG_REGISTER);                                                          //We want to write to the ACCEL_CONFIG register (1A hex)
+  Wire.write(MPU6050_ACCEL_CONFIG_REGISTER);                                 //We want to write to the ACCEL_CONFIG register (1A hex)
   Wire.write(0x10);                                                          //Set the register bits as 00010000 (+/- 8g full scale range)
   Wire.endTransmission();                                                    //End the transmission with the gyro
 
