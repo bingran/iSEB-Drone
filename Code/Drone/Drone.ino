@@ -134,7 +134,7 @@ int noteDurations[] = {
 #define MPU6050_GYRO_OUT_REGISTER     0x43
 #define MPU6050_ACCEL_OUT_REGISTER    0x3B
 
-#define MPU6050_CAL_NUM               1000
+#define MPU6050_CAL_NUM               2000
 
 uint16_t cal_int = 0;
 long acc_x, acc_y, acc_z, acc_total_vector;
@@ -142,7 +142,7 @@ unsigned long timer_channel_1, timer_channel_2, timer_channel_3, timer_channel_4
 unsigned long timer_1, timer_2, timer_3, timer_4, current_time;
 unsigned long loop_timer;
 double gyro_pitch, gyro_roll, gyro_yaw;
-double gyro_axis_cal[6];
+double gyro_axis_cal[6] = {0,0,0,0,0,0};
 float pid_error_temp;
 float pid_i_mem_roll, pid_roll_setpoint, gyro_roll_input, pid_output_roll, pid_last_roll_d_error;
 float pid_i_mem_pitch, pid_pitch_setpoint, gyro_pitch_input, pid_output_pitch, pid_last_pitch_d_error;
@@ -187,7 +187,13 @@ void setup() {
     gyro_axis_cal[1] += gyro_axis[1];                                       //Ad roll value to gyro_roll_cal.
     gyro_axis_cal[2] += gyro_axis[2];                                       //Ad pitch value to gyro_pitch_cal.
     gyro_axis_cal[3] += gyro_axis[3];                                       //Ad yaw value to gyro_yaw_cal.
-     if(cal_int % 125 == 0)Serial.print(".");                             //Print a dot on the LCD every 125 readings
+    Serial.print("gyro_axis_cal[1] : ");
+    Serial.print(gyro_axis_cal[1]);
+    Serial.print(" | gyro_axis_cal[2] : ");
+    Serial.print(gyro_axis_cal[2]);
+    Serial.print(" | gyro_axis_cal[3]: ");
+    Serial.println(gyro_axis_cal[3]);
+    if(cal_int % 125 == 0)Serial.print(".");                             //Print a dot on the LCD every 125 readings
     delay(4);                                                               //Wait 1000us.
   }
 
@@ -493,7 +499,7 @@ void MPU6050_readData(){
   acc_y = acc_axis[2];                           //Set acc_y to the correct axis that was stored in the EEPROM.
   acc_z = acc_axis[3];                           //Set acc_z to the correct axis that was stored in the EEPROM.  
 #if MPU6050_DEBUG == 1
-  if((millis() - MPU6050Printtimer > 1000)&&(2==state))
+  if(((millis() - MPU6050Printtimer > 1000)&&(2==state))||(0==state))
   {
     Serial.print("gyro_roll : ");
     Serial.print(gyro_roll);

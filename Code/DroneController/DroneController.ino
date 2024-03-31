@@ -233,11 +233,13 @@ void setup() {
 
 void updateaAdcButton()
 {
-  flLeftX = analogRead(leftXPin) - flOffsetLeftX;
-  flLeftY = analogRead(leftYPin) - flOffsetLeftY;
+  flLeftX   = analogRead(leftXPin) - flOffsetLeftX;
+  flLeftY   = analogRead(leftYPin) - flOffsetLeftY;
   flRightX = analogRead(rightXPin) - flOffsetRightX;
   flRightY = analogRead(rightYPin) - flOffsetRightY;
-
+  flLeftX = 1027- flLeftX;
+  flRightX = 1027 - flRightX;
+  
   if(flLeftX<62)
     flLeftX = 62;
   else if(flLeftX>962)
