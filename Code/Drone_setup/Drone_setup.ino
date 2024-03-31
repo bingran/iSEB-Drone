@@ -398,295 +398,284 @@ void loop(){
     check_to_continue();
   }
     
-  // if(error == 0){
-  //   //What gyro is connected
-  //   Serial.println(F(""));
-  //   Serial.println(F("==================================================="));
-  //   Serial.println(F("Gyro search"));
-  //   Serial.println(F("==================================================="));
-  //   delay(2000);
+  if(error == 0){
+    //What gyro is connected
+    Serial.println(F(""));
+    Serial.println(F("==================================================="));
+    Serial.println(F("Gyro search"));
+    Serial.println(F("==================================================="));
+    delay(2000);
     
-  //   Serial.println(F("Searching for MPU-6050 on address 0x68/104"));
-  //   delay(1000);
-  //   if(search_gyro(0x68, 0x75) == 0x68){
-  //     Serial.println(F("MPU-6050 found on address 0x68"));
-  //     type = 1;
-  //     gyro_address = 0x68;
-  //   }
+    Serial.println(F("Searching for MPU-6050 on address 0x68/104"));
+    delay(1000);
+    if(search_gyro(0x68, 0x75) == 0x68){
+      Serial.println(F("MPU-6050 found on address 0x68"));
+      type = 1;
+      gyro_address = 0x68;
+    }
     
-  //   if(type == 0){
-  //     Serial.println(F("Searching for MPU-6050 on address 0x69/105"));
-  //     delay(1000);
-  //     if(search_gyro(0x69, 0x75) == 0x68){
-  //       Serial.println(F("MPU-6050 found on address 0x69"));
-  //       type = 1;
-  //       gyro_address = 0x69;
-  //     }
-  //   }
+    if(type == 0){
+      Serial.println(F("Searching for MPU-6050 on address 0x69/105"));
+      delay(1000);
+      if(search_gyro(0x69, 0x75) == 0x68){
+        Serial.println(F("MPU-6050 found on address 0x69"));
+        type = 1;
+        gyro_address = 0x69;
+      }
+    }
     
-  //   if(type == 0){
-  //     Serial.println(F("Searching for L3G4200D on address 0x68/104"));
-  //     delay(1000);
-  //     if(search_gyro(0x68, 0x0F) == 0xD3){
-  //       Serial.println(F("L3G4200D found on address 0x68"));
-  //       type = 2;
-  //       gyro_address = 0x68;
-  //     }
-  //   }
+    if(type == 0){
+      Serial.println(F("Searching for L3G4200D on address 0x68/104"));
+      delay(1000);
+      if(search_gyro(0x68, 0x0F) == 0xD3){
+        Serial.println(F("L3G4200D found on address 0x68"));
+        type = 2;
+        gyro_address = 0x68;
+      }
+    }
     
-  //   if(type == 0){
-  //     Serial.println(F("Searching for L3G4200D on address 0x69/105"));
-  //     delay(1000);
-  //     if(search_gyro(0x69, 0x0F) == 0xD3){
-  //       Serial.println(F("L3G4200D found on address 0x69"));
-  //       type = 2;
-  //       gyro_address = 0x69;
-  //     }
-  //   }
+    if(type == 0){
+      Serial.println(F("Searching for L3G4200D on address 0x69/105"));
+      delay(1000);
+      if(search_gyro(0x69, 0x0F) == 0xD3){
+        Serial.println(F("L3G4200D found on address 0x69"));
+        type = 2;
+        gyro_address = 0x69;
+      }
+    }
     
-  //   if(type == 0){
-  //     Serial.println(F("Searching for L3GD20H on address 0x6A/106"));
-  //     delay(1000);
-  //     if(search_gyro(0x6A, 0x0F) == 0xD7){
-  //       Serial.println(F("L3GD20H found on address 0x6A"));
-  //       type = 3;
-  //       gyro_address = 0x6A;
-  //     }
-  //   }
+    if(type == 0){
+      Serial.println(F("Searching for L3GD20H on address 0x6A/106"));
+      delay(1000);
+      if(search_gyro(0x6A, 0x0F) == 0xD7){
+        Serial.println(F("L3GD20H found on address 0x6A"));
+        type = 3;
+        gyro_address = 0x6A;
+      }
+    }
     
-  //   if(type == 0){
-  //    Serial.println(F("Searching for L3GD20H on address 0x6B/107"));
-  //     delay(1000);
-  //     if(search_gyro(0x6B, 0x0F) == 0xD7){
-  //       Serial.println(F("L3GD20H found on address 0x6B"));
-  //       type = 3;
-  //       gyro_address = 0x6B;
-  //     }
-  //   }
+    if(type == 0){
+     Serial.println(F("Searching for L3GD20H on address 0x6B/107"));
+      delay(1000);
+      if(search_gyro(0x6B, 0x0F) == 0xD7){
+        Serial.println(F("L3GD20H found on address 0x6B"));
+        type = 3;
+        gyro_address = 0x6B;
+      }
+    }
     
-  //   if(type == 0){
-  //     Serial.println(F("No gyro device found!!! (ERROR 3)"));
-  //     error = 1;
-  //   }
+    if(type == 0){
+      Serial.println(F("No gyro device found!!! (ERROR 3)"));
+      error = 1;
+    }
     
-  //   else{
-  //     delay(3000);
-  //     Serial.println(F(""));
-  //     Serial.println(F("==================================================="));
-  //     Serial.println(F("Gyro register settings"));
-  //     Serial.println(F("==================================================="));
-  //     start_gyro(); //Setup the gyro for further use
-  //   }
-  // }
+    else{
+      delay(3000);
+      Serial.println(F(""));
+      Serial.println(F("==================================================="));
+      Serial.println(F("Gyro register settings"));
+      Serial.println(F("==================================================="));
+      start_gyro(); //Setup the gyro for further use
+    }
+  }
   
-  // //If the gyro is found we can setup the correct gyro axes.
-  // if(error == 0){
-  //   delay(3000);
-  //   Serial.println(F(""));
-  //   Serial.println(F("==================================================="));
-  //   Serial.println(F("Gyro calibration"));
-  //   Serial.println(F("==================================================="));
-  //   Serial.println(F("Don't move the quadcopter!! Calibration starts in 3 seconds"));
-  //   delay(3000);
-  //   Serial.println(F("Calibrating the gyro, this will take +/- 8 seconds"));
-  //   Serial.print(F("Please wait"));
-  //   //Let's take multiple gyro data samples so we can determine the average gyro offset (calibration).
-  //   for (cal_int = 0; cal_int < 2000 ; cal_int ++){              //Take 2000 readings for calibration.
-  //     if(cal_int % 100 == 0)Serial.print(F("."));                //Print dot to indicate calibration.
-  //     gyro_signalen();                                           //Read the gyro output.
-  //     gyro_roll_cal += gyro_roll;                                //Ad roll value to gyro_roll_cal.
-  //     gyro_pitch_cal += gyro_pitch;                              //Ad pitch value to gyro_pitch_cal.
-  //     gyro_yaw_cal += gyro_yaw;                                  //Ad yaw value to gyro_yaw_cal.
-  //     delay(4);                                                  //Wait 3 milliseconds before the next loop.
-  //   }
-  //   //Now that we have 2000 measures, we need to devide by 2000 to get the average gyro offset.
-  //   gyro_roll_cal /= 2000;                                       //Divide the roll total by 2000.
-  //   gyro_pitch_cal /= 2000;                                      //Divide the pitch total by 2000.
-  //   gyro_yaw_cal /= 2000;                                        //Divide the yaw total by 2000.
+  //If the gyro is found we can setup the correct gyro axes.
+  if(error == 0){
+    delay(3000);
+    Serial.println(F(""));
+    Serial.println(F("==================================================="));
+    Serial.println(F("Gyro calibration"));
+    Serial.println(F("==================================================="));
+    Serial.println(F("Don't move the quadcopter!! Calibration starts in 3 seconds"));
+    delay(3000);
+    Serial.println(F("Calibrating the gyro, this will take +/- 8 seconds"));
+    Serial.print(F("Please wait"));
+    //Let's take multiple gyro data samples so we can determine the average gyro offset (calibration).
+    for (cal_int = 0; cal_int < 2000 ; cal_int ++){              //Take 2000 readings for calibration.
+      if(cal_int % 100 == 0)Serial.print(F("."));                //Print dot to indicate calibration.
+      gyro_signalen();                                           //Read the gyro output.
+      gyro_roll_cal += gyro_roll;                                //Ad roll value to gyro_roll_cal.
+      gyro_pitch_cal += gyro_pitch;                              //Ad pitch value to gyro_pitch_cal.
+      gyro_yaw_cal += gyro_yaw;                                  //Ad yaw value to gyro_yaw_cal.
+      delay(4);                                                  //Wait 3 milliseconds before the next loop.
+    }
+    //Now that we have 2000 measures, we need to devide by 2000 to get the average gyro offset.
+    gyro_roll_cal /= 2000;                                       //Divide the roll total by 2000.
+    gyro_pitch_cal /= 2000;                                      //Divide the pitch total by 2000.
+    gyro_yaw_cal /= 2000;                                        //Divide the yaw total by 2000.
     
-  //   //Show the calibration results
-  //   Serial.println(F(""));
-  //   Serial.print(F("Axis 1 offset="));
-  //   Serial.println(gyro_roll_cal);
-  //   Serial.print(F("Axis 2 offset="));
-  //   Serial.println(gyro_pitch_cal);
-  //   Serial.print(F("Axis 3 offset="));
-  //   Serial.println(gyro_yaw_cal);
-  //   Serial.println(F(""));
+    //Show the calibration results
+    Serial.println(F(""));
+    Serial.print(F("Axis 1 offset="));
+    Serial.println(gyro_roll_cal);
+    Serial.print(F("Axis 2 offset="));
+    Serial.println(gyro_pitch_cal);
+    Serial.print(F("Axis 3 offset="));
+    Serial.println(gyro_yaw_cal);
+    Serial.println(F(""));
     
-  //   Serial.println(F("==================================================="));
-  //   Serial.println(F("Gyro axes configuration"));
-  //   Serial.println(F("==================================================="));
+    Serial.println(F("==================================================="));
+    Serial.println(F("Gyro axes configuration"));
+    Serial.println(F("==================================================="));
     
-  //   //Detect the left wing up movement
-  //   Serial.println(F("Lift the left side of the quadcopter to a 45 degree angle within 10 seconds"));
-  //   //Check axis movement
-  //   check_gyro_axes(1);
-  //   if(error == 0){
-  //     Serial.println(F("OK!"));
-  //     Serial.print(F("Angle detection = "));
-  //     Serial.println(roll_axis & 0b00000011);
-  //     if(roll_axis & 0b10000000)Serial.println(F("Axis inverted = yes"));
-  //     else Serial.println(F("Axis inverted = no"));
-  //     Serial.println(F("Put the quadcopter back in its original position"));
-  //     Serial.println(F("Move stick 'nose up' and back to center to continue"));
-  //     check_to_continue();
+    //Detect the left wing up movement
+    Serial.println(F("Lift the left side of the quadcopter to a 45 degree angle within 10 seconds"));
+    //Check axis movement
+    check_gyro_axes(1);
+    if(error == 0){
+      Serial.println(F("OK!"));
+      Serial.print(F("Angle detection = "));
+      Serial.println(roll_axis & 0b00000011);
+      if(roll_axis & 0b10000000)Serial.println(F("Axis inverted = yes"));
+      else Serial.println(F("Axis inverted = no"));
+      Serial.println(F("Put the quadcopter back in its original position"));
+      Serial.println(F("Move stick 'nose up' and back to center to continue"));
+      check_to_continue();
 
-  //     //Detect the nose up movement
-  //     Serial.println(F(""));
-  //     Serial.println(F(""));
-  //     Serial.println(F("Lift the nose of the quadcopter to a 45 degree angle within 10 seconds"));
-  //     //Check axis movement
-  //     check_gyro_axes(2);
-  //   }
-  //   if(error == 0){
-  //     Serial.println(F("OK!"));
-  //     Serial.print(F("Angle detection = "));
-  //     Serial.println(pitch_axis & 0b00000011);
-  //     if(pitch_axis & 0b10000000)Serial.println(F("Axis inverted = yes"));
-  //     else Serial.println(F("Axis inverted = no"));
-  //     Serial.println(F("Put the quadcopter back in its original position"));
-  //     Serial.println(F("Move stick 'nose up' and back to center to continue"));
-  //     check_to_continue();
+      //Detect the nose up movement
+      Serial.println(F(""));
+      Serial.println(F(""));
+      Serial.println(F("Lift the nose of the quadcopter to a 45 degree angle within 10 seconds"));
+      //Check axis movement
+      check_gyro_axes(2);
+    }
+    if(error == 0){
+      Serial.println(F("OK!"));
+      Serial.print(F("Angle detection = "));
+      Serial.println(pitch_axis & 0b00000011);
+      if(pitch_axis & 0b10000000)Serial.println(F("Axis inverted = yes"));
+      else Serial.println(F("Axis inverted = no"));
+      Serial.println(F("Put the quadcopter back in its original position"));
+      Serial.println(F("Move stick 'nose up' and back to center to continue"));
+      check_to_continue();
       
-  //     //Detect the nose right movement
-  //     Serial.println(F(""));
-  //     Serial.println(F(""));
-  //     Serial.println(F("Rotate the nose of the quadcopter 45 degree to the right within 10 seconds"));
-  //     //Check axis movement
-  //     check_gyro_axes(3);
-  //   }
-  //   if(error == 0){
-  //     Serial.println(F("OK!"));
-  //     Serial.print(F("Angle detection = "));
-  //     Serial.println(yaw_axis & 0b00000011);
-  //     if(yaw_axis & 0b10000000)Serial.println(F("Axis inverted = yes"));
-  //     else Serial.println(F("Axis inverted = no"));
-  //     Serial.println(F("Put the quadcopter back in its original position"));
-  //     Serial.println(F("Move stick 'nose up' and back to center to continue"));
-  //     check_to_continue();
-  //   }
-  // }
-  // if(error == 0){
-  //   Serial.println(F(""));
-  //   Serial.println(F("==================================================="));
-  //   Serial.println(F("LED test"));
-  //   Serial.println(F("==================================================="));
-  //   digitalWrite(12, HIGH);
-  //   Serial.println(F("The LED should now be lit"));
-  //   Serial.println(F("Move stick 'nose up' and back to center to continue"));
-  //   check_to_continue();
-  //   digitalWrite(12, LOW);
-  // }
+      //Detect the nose right movement
+      Serial.println(F(""));
+      Serial.println(F(""));
+      Serial.println(F("Rotate the nose of the quadcopter 45 degree to the right within 10 seconds"));
+      //Check axis movement
+      check_gyro_axes(3);
+    }
+    if(error == 0){
+      Serial.println(F("OK!"));
+      Serial.print(F("Angle detection = "));
+      Serial.println(yaw_axis & 0b00000011);
+      if(yaw_axis & 0b10000000)Serial.println(F("Axis inverted = yes"));
+      else Serial.println(F("Axis inverted = no"));
+      Serial.println(F("Put the quadcopter back in its original position"));
+      Serial.println(F("Move stick 'nose up' and back to center to continue"));
+      check_to_continue();
+    }
+  }
+
+  Serial.println(F(""));
   
-  // Serial.println(F(""));
+  if(error == 0){
+    Serial.println(F("==================================================="));
+    Serial.println(F("Final setup check"));
+    Serial.println(F("==================================================="));
+    delay(1000);
+    if(receiver_check_byte == 0b00001111){
+      Serial.println(F("Receiver channels ok"));
+    }
+    else{
+      Serial.println(F("Receiver channel verification failed!!! (ERROR 6)"));
+      error = 1;
+    }
+    delay(1000);
+    if(gyro_check_byte == 0b00000111){
+      Serial.println(F("Gyro axes ok"));
+    }
+    else{
+      Serial.println(F("Gyro exes verification failed!!! (ERROR 7)"));
+      error = 1;
+    }
+  }     
   
-  // if(error == 0){
-  //   Serial.println(F("==================================================="));
-  //   Serial.println(F("Final setup check"));
-  //   Serial.println(F("==================================================="));
-  //   delay(1000);
-  //   if(receiver_check_byte == 0b00001111){
-  //     Serial.println(F("Receiver channels ok"));
-  //   }
-  //   else{
-  //     Serial.println(F("Receiver channel verification failed!!! (ERROR 6)"));
-  //     error = 1;
-  //   }
-  //   delay(1000);
-  //   if(gyro_check_byte == 0b00000111){
-  //     Serial.println(F("Gyro axes ok"));
-  //   }
-  //   else{
-  //     Serial.println(F("Gyro exes verification failed!!! (ERROR 7)"));
-  //     error = 1;
-  //   }
-  // }     
-  
-  // if(error == 0){
-  //   //If all is good, store the information in the EEPROM
-  //   Serial.println(F(""));
-  //   Serial.println(F("==================================================="));
-  //   Serial.println(F("Storing EEPROM information"));
-  //   Serial.println(F("==================================================="));
-  //   Serial.println(F("Writing EEPROM"));
-  //   delay(1000);
-  //   Serial.println(F("Done!"));
-  //   EEPROM.write(0, center_channel_1 & 0b11111111);
-  //   EEPROM.write(1, center_channel_1 >> 8);
-  //   EEPROM.write(2, center_channel_2 & 0b11111111);
-  //   EEPROM.write(3, center_channel_2 >> 8);
-  //   EEPROM.write(4, center_channel_3 & 0b11111111);
-  //   EEPROM.write(5, center_channel_3 >> 8);
-  //   EEPROM.write(6, center_channel_4 & 0b11111111);
-  //   EEPROM.write(7, center_channel_4 >> 8);
-  //   EEPROM.write(8, high_channel_1 & 0b11111111);
-  //   EEPROM.write(9, high_channel_1 >> 8);
-  //   EEPROM.write(10, high_channel_2 & 0b11111111);
-  //   EEPROM.write(11, high_channel_2 >> 8);
-  //   EEPROM.write(12, high_channel_3 & 0b11111111);
-  //   EEPROM.write(13, high_channel_3 >> 8);
-  //   EEPROM.write(14, high_channel_4 & 0b11111111);
-  //   EEPROM.write(15, high_channel_4 >> 8);
-  //   EEPROM.write(16, low_channel_1 & 0b11111111);
-  //   EEPROM.write(17, low_channel_1 >> 8);
-  //   EEPROM.write(18, low_channel_2 & 0b11111111);
-  //   EEPROM.write(19, low_channel_2 >> 8);
-  //   EEPROM.write(20, low_channel_3 & 0b11111111);
-  //   EEPROM.write(21, low_channel_3 >> 8);
-  //   EEPROM.write(22, low_channel_4 & 0b11111111);
-  //   EEPROM.write(23, low_channel_4 >> 8);
-  //   EEPROM.write(24, channel_1_assign);
-  //   EEPROM.write(25, channel_2_assign);
-  //   EEPROM.write(26, channel_3_assign);
-  //   EEPROM.write(27, channel_4_assign);
-  //   EEPROM.write(28, roll_axis);
-  //   EEPROM.write(29, pitch_axis);
-  //   EEPROM.write(30, yaw_axis);
-  //   EEPROM.write(31, type);
-  //   EEPROM.write(32, gyro_address);
-  //   //Write the EEPROM signature
-  //   EEPROM.write(33, 'J'); 
-  //   EEPROM.write(34, 'M');
-  //   EEPROM.write(35, 'B');
+  if(error == 0){
+    //If all is good, store the information in the EEPROM
+    Serial.println(F(""));
+    Serial.println(F("==================================================="));
+    Serial.println(F("Storing EEPROM information"));
+    Serial.println(F("==================================================="));
+    Serial.println(F("Writing EEPROM"));
+    delay(1000);
+    Serial.println(F("Done!"));
+    EEPROM.write(0, center_channel_1 & 0b11111111);
+    EEPROM.write(1, center_channel_1 >> 8);
+    EEPROM.write(2, center_channel_2 & 0b11111111);
+    EEPROM.write(3, center_channel_2 >> 8);
+    EEPROM.write(4, center_channel_3 & 0b11111111);
+    EEPROM.write(5, center_channel_3 >> 8);
+    EEPROM.write(6, center_channel_4 & 0b11111111);
+    EEPROM.write(7, center_channel_4 >> 8);
+    EEPROM.write(8, high_channel_1 & 0b11111111);
+    EEPROM.write(9, high_channel_1 >> 8);
+    EEPROM.write(10, high_channel_2 & 0b11111111);
+    EEPROM.write(11, high_channel_2 >> 8);
+    EEPROM.write(12, high_channel_3 & 0b11111111);
+    EEPROM.write(13, high_channel_3 >> 8);
+    EEPROM.write(14, high_channel_4 & 0b11111111);
+    EEPROM.write(15, high_channel_4 >> 8);
+    EEPROM.write(16, low_channel_1 & 0b11111111);
+    EEPROM.write(17, low_channel_1 >> 8);
+    EEPROM.write(18, low_channel_2 & 0b11111111);
+    EEPROM.write(19, low_channel_2 >> 8);
+    EEPROM.write(20, low_channel_3 & 0b11111111);
+    EEPROM.write(21, low_channel_3 >> 8);
+    EEPROM.write(22, low_channel_4 & 0b11111111);
+    EEPROM.write(23, low_channel_4 >> 8);
+    EEPROM.write(24, channel_1_assign);
+    EEPROM.write(25, channel_2_assign);
+    EEPROM.write(26, channel_3_assign);
+    EEPROM.write(27, channel_4_assign);
+    EEPROM.write(28, roll_axis);
+    EEPROM.write(29, pitch_axis);
+    EEPROM.write(30, yaw_axis);
+    EEPROM.write(31, type);
+    EEPROM.write(32, gyro_address);
+    //Write the EEPROM signature
+    EEPROM.write(33, 'J'); 
+    EEPROM.write(34, 'M');
+    EEPROM.write(35, 'B');
         
     
-  //   //To make sure evrything is ok, verify the EEPROM data.
-  //   Serial.println(F("Verify EEPROM data"));
-  //   delay(1000);
-  //   if(center_channel_1 != ((EEPROM.read(1) << 8) | EEPROM.read(0)))error = 1;
-  //   if(center_channel_2 != ((EEPROM.read(3) << 8) | EEPROM.read(2)))error = 1;
-  //   if(center_channel_3 != ((EEPROM.read(5) << 8) | EEPROM.read(4)))error = 1;
-  //   if(center_channel_4 != ((EEPROM.read(7) << 8) | EEPROM.read(6)))error = 1;
+    //To make sure evrything is ok, verify the EEPROM data.
+    Serial.println(F("Verify EEPROM data"));
+    delay(1000);
+    if(center_channel_1 != ((EEPROM.read(1) << 8) | EEPROM.read(0)))error = 1;
+    if(center_channel_2 != ((EEPROM.read(3) << 8) | EEPROM.read(2)))error = 1;
+    if(center_channel_3 != ((EEPROM.read(5) << 8) | EEPROM.read(4)))error = 1;
+    if(center_channel_4 != ((EEPROM.read(7) << 8) | EEPROM.read(6)))error = 1;
     
-  //   if(high_channel_1 != ((EEPROM.read(9) << 8) | EEPROM.read(8)))error = 1;
-  //   if(high_channel_2 != ((EEPROM.read(11) << 8) | EEPROM.read(10)))error = 1;
-  //   if(high_channel_3 != ((EEPROM.read(13) << 8) | EEPROM.read(12)))error = 1;
-  //   if(high_channel_4 != ((EEPROM.read(15) << 8) | EEPROM.read(14)))error = 1;
+    if(high_channel_1 != ((EEPROM.read(9) << 8) | EEPROM.read(8)))error = 1;
+    if(high_channel_2 != ((EEPROM.read(11) << 8) | EEPROM.read(10)))error = 1;
+    if(high_channel_3 != ((EEPROM.read(13) << 8) | EEPROM.read(12)))error = 1;
+    if(high_channel_4 != ((EEPROM.read(15) << 8) | EEPROM.read(14)))error = 1;
     
-  //   if(low_channel_1 != ((EEPROM.read(17) << 8) | EEPROM.read(16)))error = 1;
-  //   if(low_channel_2 != ((EEPROM.read(19) << 8) | EEPROM.read(18)))error = 1;
-  //   if(low_channel_3 != ((EEPROM.read(21) << 8) | EEPROM.read(20)))error = 1;
-  //   if(low_channel_4 != ((EEPROM.read(23) << 8) | EEPROM.read(22)))error = 1;
+    if(low_channel_1 != ((EEPROM.read(17) << 8) | EEPROM.read(16)))error = 1;
+    if(low_channel_2 != ((EEPROM.read(19) << 8) | EEPROM.read(18)))error = 1;
+    if(low_channel_3 != ((EEPROM.read(21) << 8) | EEPROM.read(20)))error = 1;
+    if(low_channel_4 != ((EEPROM.read(23) << 8) | EEPROM.read(22)))error = 1;
     
-  //   if(channel_1_assign != EEPROM.read(24))error = 1;
-  //   if(channel_2_assign != EEPROM.read(25))error = 1;
-  //   if(channel_3_assign != EEPROM.read(26))error = 1;
-  //   if(channel_4_assign != EEPROM.read(27))error = 1;
+    if(channel_1_assign != EEPROM.read(24))error = 1;
+    if(channel_2_assign != EEPROM.read(25))error = 1;
+    if(channel_3_assign != EEPROM.read(26))error = 1;
+    if(channel_4_assign != EEPROM.read(27))error = 1;
     
-  //   if(roll_axis != EEPROM.read(28))error = 1;
-  //   if(pitch_axis != EEPROM.read(29))error = 1;
-  //   if(yaw_axis != EEPROM.read(30))error = 1;
-  //   if(type != EEPROM.read(31))error = 1;
-  //   if(gyro_address != EEPROM.read(32))error = 1;
+    if(roll_axis != EEPROM.read(28))error = 1;
+    if(pitch_axis != EEPROM.read(29))error = 1;
+    if(yaw_axis != EEPROM.read(30))error = 1;
+    if(type != EEPROM.read(31))error = 1;
+    if(gyro_address != EEPROM.read(32))error = 1;
     
-  //   if('J' != EEPROM.read(33))error = 1;
-  //   if('M' != EEPROM.read(34))error = 1;
-  //   if('B' != EEPROM.read(35))error = 1;
+    if('J' != EEPROM.read(33))error = 1;
+    if('M' != EEPROM.read(34))error = 1;
+    if('B' != EEPROM.read(35))error = 1;
   
-  //   if(error == 1)Serial.println(F("EEPROM verification failed!!! (ERROR 5)"));
-  //   else Serial.println(F("Verification done"));
-  // }
+    if(error == 1)Serial.println(F("EEPROM verification failed!!! (ERROR 5)"));
+    else Serial.println(F("Verification done"));
+  }
   
   
   if(error == 0){
