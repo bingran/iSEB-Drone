@@ -9,7 +9,7 @@
 
 #define GPS_DEBUG 0
 #define BME_DEBUG 0
-#define MPU6050_DEBUG 1
+#define MPU6050_DEBUG 0
 /* Pinout Definition */
 #define rfCSNPin 10
 #define pwmMotor4 9
@@ -154,6 +154,7 @@ int acc_axis[4], gyro_axis[4];
 float roll_level_adjust, pitch_level_adjust;
 long MPU6050timer = 0;
 long MPU6050Printtimer = 0;
+long MPU6050Printtimer2 = 0;
 
 void setup() {
   
@@ -162,8 +163,10 @@ void setup() {
   Serial.println("Hello World!");
 
   Wire.begin();   //Start the I2C as master.
+  Serial.println("Establish I2C communication");
   TWBR = 12;   //Set the I2C clock speed to 400kHz.
-
+  
+  Serial.println("Enable motor control");
   mot1.attach(pwmMotor1, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
   mot2.attach(pwmMotor2, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
   mot3.attach(pwmMotor3, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
@@ -175,8 +178,10 @@ void setup() {
   mot4.writeMicroseconds(MIN_PULSE_LENGTH);
 
   delay(250);   
+  Serial.println("BME Init");
   BME_Init();
-  delay(250);  
+  delay(250); 
+  Serial.println("MPU6050 Init"); 
   MPU6050_Init(); //Set the specific gyro registers. 
   delay(250);  
 
@@ -187,12 +192,15 @@ void setup() {
     gyro_axis_cal[1] += gyro_axis[1];                                       //Ad roll value to gyro_roll_cal.
     gyro_axis_cal[2] += gyro_axis[2];                                       //Ad pitch value to gyro_pitch_cal.
     gyro_axis_cal[3] += gyro_axis[3];                                       //Ad yaw value to gyro_yaw_cal.
+    
+#if MPU6050_DEBUG == 1
     Serial.print("gyro_axis_cal[1] : ");
     Serial.print(gyro_axis_cal[1]);
     Serial.print(" | gyro_axis_cal[2] : ");
     Serial.print(gyro_axis_cal[2]);
     Serial.print(" | gyro_axis_cal[3]: ");
     Serial.println(gyro_axis_cal[3]);
+#endif
     if(cal_int % 125 == 0)Serial.print(".");                             //Print a dot on the LCD every 125 readings
     delay(4);                                                               //Wait 1000us.
   }
@@ -246,6 +254,38 @@ void loop() {
   BME_task();
   GPS_task();
   radio_task();
+  if((millis() - MPU6050Printtimer2 )> 1000)
+  {
+      MPU6050Printtimer2 = millis();
+      
+      Serial.print("lift ");
+      Serial.print(double_lift);
+      Serial.print("|yaw ");
+      Serial.print(double_yaw);
+      Serial.print("|roll ");
+      Serial.print(double_roll);
+      Serial.print("|pitch ");
+      Serial.println(double_pitch);
+
+      Serial.print("pid_pitch ");
+      Serial.print(pid_output_pitch);
+      Serial.print("|pid_roll ");
+      Serial.print(pid_output_roll);
+      Serial.print("|pid_yaw ");
+      Serial.println(pid_output_yaw);
+      
+      Serial.print("esc_1 ");
+      Serial.print(esc_1);
+      Serial.print("|esc_2 ");
+      Serial.print(esc_2);
+      Serial.print("|esc_3 ");
+      Serial.print(esc_3);
+      Serial.print("|esc_4 ");
+      Serial.println(esc_4);
+      
+      Serial.print("state ");
+      Serial.println(state);
+  }
   switch(state)
   {
     case 0:
@@ -254,7 +294,6 @@ void loop() {
       {
         state = 1; 
       }
-      state = 2; //* for testing purposer */
       break;
     }
     case 1:
@@ -279,6 +318,7 @@ void loop() {
     {
       if(millis() - MPU6050timer > 4)/* loop every 4 ms */ 
       {
+        MPU6050timer = millis();
         /* get data from sensor */
         MPU6050_readData();
         // To average the value againt changes 
@@ -357,14 +397,18 @@ void loop() {
 
         /* use pid to calculate motor outputt */
         calculate_pid();                                                            //PID inputs are known. So we can calculate the pid output.
+        esc_1 = double_lift - pid_output_pitch + pid_output_roll - pid_output_yaw; //Calculate the pulse for esc 1 (front-right - CCW)
+        esc_2 = double_lift + pid_output_pitch + pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 2 (rear-right - CW)
+        esc_3 = double_lift + pid_output_pitch - pid_output_roll - pid_output_yaw; //Calculate the pulse for esc 3 (rear-left - CCW)
+        esc_4 = double_lift - pid_output_pitch - pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 4 (front-left - CW)
 
+       
         /* update motor frequency */
         mot1.writeMicroseconds(esc_1);
         mot2.writeMicroseconds(esc_2);
-        mot3.writeMicroseconds(esc_4);
+        mot3.writeMicroseconds(esc_3);
         mot4.writeMicroseconds(esc_4);
 
-        MPU6050timer = millis();
       }
       break;
     }
@@ -573,8 +617,6 @@ void BME_Init()
   uint8_t config_reg    = (t_sb << 5) | (filter << 2) | spi3w_en;
   uint8_t ctrl_hum_reg  = osrs_h;
 
-  Wire.begin();
-    
   writeReg(0xF2,ctrl_hum_reg);
   writeReg(0xF4,ctrl_meas_reg);
   writeReg(0xF5,config_reg);
