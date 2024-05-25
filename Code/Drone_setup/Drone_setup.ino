@@ -929,7 +929,6 @@ void wait_for_receiver(){
     Serial.println(F("."));
     Serial.println(F("No valid receiver signals found!!! (ERROR 1)"));
   }
-  else Serial.println(F(" OK"));
 }
 
 bool checkRFSignal(bool printout)
@@ -957,7 +956,6 @@ bool checkRFSignal(bool printout)
     receiver_input_channel_4 = double_pitch;
     if(true == printout)
     {
-      Serial.println(" ");  
       Serial.print(F("Recieved on signal "));
       Serial.print(double_yaw);     
       Serial.print(" | ");

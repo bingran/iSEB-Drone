@@ -290,7 +290,7 @@ void loop() {
   {
     case 0:
     {
-      if((1200 > double_lift)&& (1200 > double_yaw))
+      if(1900 < double_lift)
       {
         state = 1; 
       }
@@ -298,7 +298,7 @@ void loop() {
     }
     case 1:
     {
-      if(( 1050 < double_lift ) && ( 1200 > double_lift))
+      if(1200 > double_lift)
       {
         state = 2;
         angle_pitch = angle_pitch_acc;                                          //Set the gyro pitch angle equal to the accelerometer pitch angle when the quadcopter is started.
@@ -324,6 +324,7 @@ void loop() {
         // To average the value againt changes 
         // 2 btye 65535 range ± 500 °/s so we will got 65.5 = 1 °/s 
         //65.5 = 1 deg/sec (check the datasheet of the MPU-6050 for more information).
+        // gyro_XXX_input is preivous value gyro_XXX is current input
         gyro_roll_input = (gyro_roll_input * 0.7) + ((gyro_roll / 65.5) * 0.3);   //Gyro pid input is deg/sec.
         gyro_pitch_input = (gyro_pitch_input * 0.7) + ((gyro_pitch / 65.5) * 0.3);//Gyro pid input is deg/sec.
         gyro_yaw_input = (gyro_yaw_input * 0.7) + ((gyro_yaw / 65.5) * 0.3);      //Gyro pid input is deg/sec.
@@ -402,7 +403,7 @@ void loop() {
         esc_3 = double_lift + pid_output_pitch - pid_output_roll - pid_output_yaw; //Calculate the pulse for esc 3 (rear-left - CCW)
         esc_4 = double_lift - pid_output_pitch - pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 4 (front-left - CW)
 
-       
+        check_minmax();
         /* update motor frequency */
         mot1.writeMicroseconds(esc_1);
         mot2.writeMicroseconds(esc_2);
@@ -463,6 +464,42 @@ void radio_task()
 //The PID controllers are explained in part 5 of the YMFC-3D video session:
 //https://youtu.be/JBvnB0279-Q 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void check_minmax()
+{
+  if(esc_1>2000)
+  {
+    esc_1 = 2000;
+  }
+  else if(esc_1 < 1050)
+  {
+   esc_1 = 1050;
+  }
+  if(esc_2>2000)
+  {
+    esc_2 = 2000;
+  }
+  else if(esc_2 < 1050)
+  {
+   esc_2 = 1050;
+  }
+  if(esc_3>2000)
+  {
+    esc_3 = 2000;
+  }
+  else if(esc_3 < 1050)
+  {
+   esc_3 = 1050;
+  }
+  if(esc_4>2000)
+  {
+    esc_4 = 2000;
+  }
+  else if(esc_4 < 1050)
+  {
+   esc_4 = 1050;
+  }
+}
 void calculate_pid(){
   //pid_roll_setpoint ->set target
   //gryo_roll_input -> actual input from sensor
